@@ -406,7 +406,18 @@ class Orchestrator:
                         except Exception:pass
                     return state
                 if latest.status==ApprovalStatus.APPROVED:
-                    self.set_state(p,WorkflowState.COMPLETED)
+                    # Final approval unlocks deterministic release packaging.
+                    r=self.agents['release'].run(ctx)
+                    self.record(state,r)
+                    if r.success:
+                        self.set_state(p,WorkflowState.COMPLETED)
+                        if self.notifier:
+                            try:self.notifier.release_ready(p,r)
+                            except Exception:pass
+                        return self.db.get_state(pid) or state
+                    state.error_history.extend(r.errors[-5:])
+                    self.db.save_state(state)
+                    self.set_state(p,WorkflowState.BLOCKED)
                     return self.db.get_state(pid) or state
                 if latest.status==ApprovalStatus.REJECTED:
                     return state
