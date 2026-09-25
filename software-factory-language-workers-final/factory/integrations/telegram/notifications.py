@@ -1,3 +1,4 @@
+from pathlib import Path
 from __future__ import annotations
 import json, urllib.request
 from .formatter import project_status, approval_text
@@ -39,4 +40,26 @@ class TelegramNotifier:
 
     def release_ready(self, project, result):
         data = result.detailed_output if isinstance(result.detailed_output, dict) else {}
-        self._send(f"📦 <b>#RELEASE</b> Release package created\n\n{project_status(project)}\n\nPackage: <code>{data.get('package','release/')}</code>")
+        package = data.get('package')
+        self._send("📦 <b>#RELEASE</b> Release package created\n\n" + project_status(project) + "\n\nPackage: <code>" + str(package or 'release/') + "</code>")
+        if package:
+            self._send_document(project, package)
+
+    def _send_document(self, project, relative_path):
+        token=self.settings.telegram_bot_token
+        if not token: return
+        path=Path(project.workspace_path) / relative_path
+        if not path.is_file(): return
+        chat_ids=self.settings.telegram_allowed_chat_ids or self.settings.telegram_allowed_user_ids
+        for chat_id in chat_ids:
+            try:
+                boundary='factorytelegram'
+                data=path.read_bytes()
+                body=(f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'
+                      f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{path.name}"\r\n'
+                      'Content-Type: application/zip\r\n\r\n').encode()+data+f'\r\n--{boundary}--\r\n'.encode()
+                req=urllib.request.Request(f'https://api.telegram.org/bot{token}/sendDocument',data=body,
+                    headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
+                urllib.request.urlopen(req,timeout=60).read()
+            except Exception:
+                pass
