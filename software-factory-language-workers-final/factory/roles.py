@@ -26,7 +26,19 @@ TAG_TO_ROLE = {
 }
 
 def tag_for(role: str) -> str:
-    return ROLE_TAGS.get((role or '').strip().casefold(), '#FACTORY')
+    key=(role or '').strip().casefold()
+    if key in ROLE_TAGS: return ROLE_TAGS[key]
+    normalized=key.replace(' ','').replace('/','').replace('-','').replace('_','')
+    if 'uiux' in normalized or ('ui' in normalized and 'ux' in normalized): return '#UIUX'
+    if 'security' in normalized: return '#SECURITY'
+    if 'review' in normalized and ('ui' in normalized or 'ux' in normalized): return '#UXREVIEW'
+    if 'review' in normalized: return '#REVIEWER'
+    if 'develop' in normalized or normalized in {'dev','coder'}: return '#DEV'
+    if 'test' in normalized or normalized in {'qa','qualityassurance'}: return '#TESTER'
+    if 'architect' in normalized or 'analyst' in normalized: return '#ARCHITECT'
+    if 'planner' in normalized or 'projectmanager' in normalized: return '#PM'
+    if 'release' in normalized: return '#RELEASE'
+    return '#FACTORY'
 
 def extract_target(text: str):
     import re
