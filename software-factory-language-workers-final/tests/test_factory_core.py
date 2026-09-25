@@ -70,6 +70,9 @@ def test_flutter_unavailable_blocks_real_run_with_clear_error(tmp_path, monkeypa
     settings=Settings(tmp_path/'factory.db',tmp_path/'workspaces','INFO','openai','model','dummy',3,10,10,mode='real')
     settings.ensure_directories()
     o=Orchestrator(Database(settings.db_path),settings)
+    from factory.agents import UIUXAgent, UIUXReviewerAgent
+    from factory.providers.mock import MockProvider
+    o.agents['uiux']=UIUXAgent(MockProvider('mock')); o.agents['uiux_reviewer']=UIUXReviewerAgent(MockProvider('mock'))
     p=o.create_project('Clothes Store','Build a Flutter app')
     from factory.approvals import ApprovalService
     o.run(p.id, mock=False)
