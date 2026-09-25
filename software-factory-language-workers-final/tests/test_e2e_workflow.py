@@ -121,11 +121,11 @@ class ClothesStoreProvider(AIProvider):
 
 def test_clothes_store_end_to_end_with_fake_dependencies(tmp_path, monkeypatch):
     from factory.adapters import registry
-    from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent
+    from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent, UIUXAgent, UIUXReviewerAgent
     settings=Settings(tmp_path/'factory.db',tmp_path/'workspaces','INFO','openai-compatible','fake','dummy',3,30,20,mode='real')
     settings.ensure_directories(); o=Orchestrator(Database(settings.db_path),settings)
     provider=ClothesStoreProvider()
-    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider)
+    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(provider); o.agents['uiux_reviewer']=UIUXReviewerAgent(provider)
     monkeypatch.setattr(registry, 'ADAPTERS', [FakeFlutterAdapter(), *registry.ADAPTERS])
     monkeypatch.setattr(o, '_flutter_dependencies_approved', lambda p, state: True)
     monkeypatch.setattr('factory.orchestrator.run_command', lambda role, command, cwd, timeout=120: __import__('factory.tools.shell',fromlist=['CommandResult']).CommandResult(command,0,'ok','',0.01))
