@@ -7,3 +7,5 @@ from .security import SecurityAgent
 from .release import ReleaseAgent
 
 from .uiux import UIUXAgent
+
+from .uiux_reviewer import UIUXReviewerAgent
