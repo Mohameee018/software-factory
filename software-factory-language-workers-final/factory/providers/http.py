@@ -43,9 +43,14 @@ class OpenAICompatibleProvider(HTTPProvider):
         self.last_usage = usage
         return LLMResponse(msg.get('content') or '', data.get('model', self.model), usage.get('prompt_tokens'), usage.get('completion_tokens'), data)
 
-    def generate_json(self, system, prompt, schema, *, timeout=None):
+    def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
         # Prefer native JSON-object response format, with schema instructions retained for broad model compatibility.
-        body = {'model': self.model, 'messages': [{'role':'system','content':system},{'role':'user','content':prompt + '\nJSON schema:\n' + json.dumps(schema)}], 'response_format': {'type':'json_object'}}
+        if images:
+            user_content=[{'type':'text','text':prompt + '\nJSON schema:\n' + json.dumps(schema)}]
+            user_content += [{'type':'image_url','image_url':{'url':'data:%s;base64,%s' % (x['mime_type'],x['data'])}} for x in images]
+            body={'model':self.model,'messages':[{'role':'system','content':system},{'role':'user','content':user_content}], 'response_format': {'type':'json_object'}}
+        else:
+            body = {'model': self.model, 'messages': [{'role':'system','content':system},{'role':'user','content':prompt + '\nJSON schema:\n' + json.dumps(schema)}], 'response_format': {'type':'json_object'}}
         data = self._request(f'{self.base_url}/chat/completions', body, {'Authorization': f'Bearer {self.api_key}', 'Content-Type':'application/json'}, timeout)
         text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content')
         if isinstance(text, dict):
