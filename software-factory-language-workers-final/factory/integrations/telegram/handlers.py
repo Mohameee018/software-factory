@@ -23,6 +23,13 @@ class TelegramHandlers:
         if not context.user_data.pop('awaiting_project',False):
             pid=context.user_data.get('active_project_id')
             if pid and self.service.db.get_project(pid):
+                p=self.service.db.get_project(pid); msg=update.effective_message.text.strip().casefold()
+                if p.current_state==WorkflowState.WAITING_FOR_DESIGN_APPROVAL and msg in {'تمام','تم','موافق','approve','approved','ok','okay'}:
+                    approvals=[a for a in self.service.db.list_approvals(p.id) if a.requested_action=='design_approval' and a.status.value=='PENDING']
+                    if approvals:
+                        ApprovalService(self.service.db).resolve(approvals[-1],True,'Human approved design via Telegram'); self._enqueue(p.id,priority=100)
+                        await update.effective_message.reply_text('✅ التصميم اتوافق عليه. بدأت مرحلة التخطيط والتنفيذ.')
+                    return
                 t=self.service.add_feedback(pid,update.effective_message.text)
                 await update.effective_message.reply_text(f'Feedback saved as task <code>{t.id}</code>. Resuming the factory.',parse_mode='HTML')
                 await asyncio.to_thread(self.service.run,pid,False,False)
