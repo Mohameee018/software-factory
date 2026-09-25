@@ -47,6 +47,9 @@ class TelegramHandlers:
                 self.service.add_feedback(pid, message)
             elif role == 'developer':
                 self.service._add_fix_task(p, target + ' direct fix', message)
+                if p.current_state == WorkflowState.READY_FOR_HUMAN:
+                    self.service.set_state(p, WorkflowState.CHANGES_REQUESTED)
+                    self.service.set_state(p, WorkflowState.TASK_CREATION)
             await update.effective_message.reply_text('📨 ' + target + ' استلم الرسالة. هتتنفذ حسب ترتيب الـworkflow، ومش هتتخطى الموظف اللي قبله.')
             self._enqueue(pid,priority=100)
             return
