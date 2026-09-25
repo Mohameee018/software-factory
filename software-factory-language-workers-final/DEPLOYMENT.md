@@ -19,7 +19,7 @@ Do not put these values into Git, Dockerfile, compose YAML, or application sourc
 
 ```bash
 docker compose build
-docker compose up -d worker bot
+docker compose up -d bot worker-python worker-node worker-java worker-flutter
 docker compose ps
 ```
 
@@ -35,7 +35,7 @@ Then use Telegram `/start` from an allowlisted account.
 ## 5. Stop / restart
 
 ```bash
-docker compose stop worker bot
+docker compose stop bot worker-python worker-node worker-java worker-flutter
 docker compose up -d worker bot
 ```
 
