@@ -76,6 +76,24 @@ class TelegramHandlers:
         if effective_user and db and hasattr(db,'set_active_project'): db.set_active_project(effective_user.id,p.id)
         self._enqueue(p.id)
         await update.effective_message.reply_text(f'Created <code>{p.id}</code>. 🚀 Execution queued.',parse_mode='HTML')
+    async def photo(self, update, context):
+        caption=(update.effective_message.caption or '').strip()
+        if not caption:
+            await update.effective_message.reply_text('📷 الصورة وصلت. ابعت وصف المشروع في نفس الرسالة كـ caption عشان أبدأ.')
+            return
+        p=self.service.create_project('Telegram Project', caption)
+        context.user_data['active_project_id']=p.id
+        user=getattr(update,'effective_user',None)
+        if user and hasattr(self.service.db,'set_active_project'): self.service.db.set_active_project(user.id,p.id)
+        photo=update.effective_message.photo[-1]
+        tg_file=await photo.get_file()
+        target=Path(p.workspace_path)/'docs'/'design'/'reference.png'
+        target.parent.mkdir(parents=True,exist_ok=True)
+        await tg_file.download_to_drive(custom_path=str(target))
+        self.service.db.event(WorkflowEvent(project_id=p.id,event_type='DESIGN_REFERENCE_RECEIVED',details={'path':'docs/design/reference.png'}))
+        self._enqueue(p.id,priority=100)
+        await update.effective_message.reply_text(f'📷 Reference screenshot saved. Created <code>{p.id}</code> and queued the design phase.',parse_mode='HTML')
+
     async def projects(self, update, context):
         ps=self.service.db.list_projects(); await update.effective_message.reply_text('\n'.join(f'{p.id} [{p.current_state.value}] {p.name}' for p in ps) or 'No projects.')
     async def project(self, update, context):
