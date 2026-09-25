@@ -35,3 +35,8 @@ class TelegramNotifier:
 
     def ready_summary(self, project, tasks):
         self._send(f'✅ <b>PROJECT READY FOR HUMAN REVIEW</b>\n\n{project_status(project)}\n\nTasks: {len(tasks)}')
+
+
+    def release_ready(self, project, result):
+        data = result.detailed_output if isinstance(result.detailed_output, dict) else {}
+        self._send(f"📦 <b>#RELEASE</b> Release package created\\n\\n{project_status(project)}\\n\\nPackage: <code>{data.get('package','release/')}</code>")
