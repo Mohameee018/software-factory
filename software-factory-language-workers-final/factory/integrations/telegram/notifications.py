@@ -22,5 +22,9 @@ class TelegramNotifier:
         if state in important:self._send(f'{important[state]}\n\n{project_status(project)}')
     def approval_requested(self, approval):
         self._send(approval_text(approval),{'inline_keyboard':[[{'text':'✅ APPROVE','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT','callback_data':f'apr:r:{approval.id}'}]]})
+    def design_ready(self, project, approval, result):
+        data=result.detailed_output if isinstance(result.detailed_output,dict) else {}
+        self._send(f"🎨 <b>UI/UX DESIGN READY</b>\\n\\n{project_status(project)}\\n\\n<b>Summary:</b> {data.get('design_summary','')}\\n<b>Screens:</b> {', '.join(data.get('screens',[]))}\\n\\nPreview: <code>docs/design/preview.html</code>\\n\\nاضغط APPROVE أو اكتب «تمام». ", {'inline_keyboard':[[{'text':'✅ APPROVE DESIGN','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT DESIGN','callback_data':f'apr:r:{approval.id}'}]]})
+
     def ready_summary(self, project, tasks):
         self._send(f'✅ <b>PROJECT READY FOR HUMAN REVIEW</b>\n\n{project_status(project)}\n\nTasks: {len(tasks)}')
