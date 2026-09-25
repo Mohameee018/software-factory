@@ -1,5 +1,5 @@
-from pathlib import Path
 from __future__ import annotations
+from pathlib import Path
 import json, urllib.request
 from .formatter import project_status, approval_text
 from .keyboards import approval_keyboard
