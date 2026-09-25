@@ -50,6 +50,10 @@ class DeveloperAgent(Agent):
         docs=''
         for rel in ('docs/PRD.md','docs/REQUIREMENTS.md','docs/ARCHITECTURE.md','docs/ACCEPTANCE_CRITERIA.md','docs/ANALYSIS.md'):
             if fs.exists(rel): docs += f'\n### {rel}\n{redact_secrets(fs.read(rel)[:12000])}'
+        team_context = ''
+        context_file = w / 'docs' / 'TEAM_CONTEXT.md'
+        if context_file.exists():
+            team_context = redact_secrets(context_file.read_text(encoding='utf-8', errors='ignore')[-12000:])
         prompt=f'''Task ID: {task.id}\nTask: {task.title}\nDescription: {task.description}\nAcceptance criteria: {task.acceptance_criteria}\nExpected files: {task.files_expected}\nRequired tests: {task.tests_required}\nPrevious failure: {task.failure_reason or 'none'}\n\nSHARED TEAM CONTEXT:\n{team_context}\n\nPROJECT DOCUMENTATION:\n{docs}\n\nWORKSPACE SOURCE:\n{self._snapshot(w)}\n\nReturn ONLY structured JSON matching the supplied schema. Use relative workspace paths only. File writes must contain complete file content. Allowed ops are write and run. Delete requests must NOT be emitted. Commands must be safe and compatible with the controlled shell allowlist. Do not add external dependencies unless the task explicitly has approved dependency changes. For Flutter, prefer Dart/Flutter core and local mock data when requirements permit.'''
         try:data=self.provider.generate_json(self.instructions,prompt,ACTION_SCHEMA,timeout=context.timeout)
         except Exception as e:return AgentResult(success=False,agent_name=self.name,task_id=task.id,summary='Developer structured output failed.',errors=[str(e)],next_action='fix')
