@@ -63,6 +63,10 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     ApprovalService(o.db).resolve(approval, True, 'test')
     state=o.run(p.id, mock=False)
     assert state.current_state == WorkflowState.READY_FOR_HUMAN
+    final=[a for a in o.db.list_approvals(p.id) if a.requested_action=='final_approval'][-1]
+    ApprovalService(o.db).resolve(final, True, 'test final approval')
+    state=o.run(p.id, mock=False)
+    assert state.current_state == WorkflowState.COMPLETED
     tests=o.db.list_events(p.id, 200)
     assert any(e.event_type == 'STATE_CHANGED' and e.state == 'FIXING' for e in tests)
     assert any('Fix code review findings' in t.title for t in o.db.list_tasks(p.id))
@@ -132,5 +136,9 @@ def test_clothes_store_end_to_end_with_fake_dependencies(tmp_path, monkeypatch):
     ApprovalService(o.db).resolve(approval, True, 'test')
     state=o.run(p.id)
     assert state.current_state == WorkflowState.READY_FOR_HUMAN
+    final=[a for a in o.db.list_approvals(p.id) if a.requested_action=='final_approval'][-1]
+    ApprovalService(o.db).resolve(final, True, 'test final approval')
+    state=o.run(p.id)
+    assert state.current_state == WorkflowState.COMPLETED
     for rel in ['lib/main.dart','lib/models/product.dart','lib/data/products.dart','lib/screens/home_screen.dart','lib/screens/product_details_screen.dart','lib/screens/cart_screen.dart','test/widget_test.dart']:
         assert (Path(p.workspace_path)/rel).is_file()
