@@ -30,7 +30,7 @@ def tag_for(role: str) -> str:
 
 def extract_target(text: str):
     import re
-    m = re.match(r'^\\s*(#(?:PM|UIUX|ARCHITECT|DEV|TESTER|REVIEWER|SECURITY|UXREVIEW|RELEASE|ALL))\\b\\s*(.*)$', text or '', re.I | re.S)
+    m = re.match(r'^\s*(#(?:PM|UIUX|ARCHITECT|DEV|TESTER|REVIEWER|SECURITY|UXREVIEW|RELEASE|ALL))\\b\\s*(.*)$', text or '', re.I | re.S)
     if not m:
         return None, (text or '').strip()
     tag = '#' + m.group(1)[1:].upper()
