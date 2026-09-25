@@ -271,12 +271,17 @@ def test_e2e_real_mode_fake_llm_and_fake_flutter_adapter_reaches_review(tmp_path
     monkeypatch.setattr('factory.orchestrator.detect', lambda w: FakeFlutter())
     monkeypatch.setattr('factory.orchestrator.run_command', lambda role, command, cwd, timeout=120: CommandResult(command,0,'Flutter fake OK','',0.01))
     monkeypatch.setattr('factory.agents.tester.execute', lambda role, kind, command, cwd, timeout: CommandResult(command,0,'Flutter fake OK','',0.01))
-    provider=FakeProvider(); o.agents.update(planner=PlannerAgent(provider),analyzer=AnalyzerAgent(provider),developer=DeveloperAgent(provider),reviewer=ReviewerAgent(provider))
+    provider=FakeProvider(); o.agents.update(planner=PlannerAgent(provider),analyzer=AnalyzerAgent(provider),developer=DeveloperAgent(provider),reviewer=ReviewerAgent(provider),uiux=UIUXAgent(provider),uiux_reviewer=UIUXReviewerAgent(provider))
     p=o.create_project('Clothes Store','Build a Flutter clothing store app')
     (Path(p.workspace_path)/'pubspec.yaml').write_text('name: clothes_store\n')
     state=o.run(p.id)
+    assert state.current_state.value == 'WAITING_FOR_DESIGN_APPROVAL'
+    from factory.approvals import ApprovalService
+    design=o.db.list_approvals(p.id)[0]
+    ApprovalService(o.db).resolve(design, True, 'test design')
+    state=o.run(p.id)
     assert state.current_state.value == 'BLOCKED'
-    approval=o.db.list_approvals(p.id)[0]
+    approval=o.db.list_approvals(p.id)[-1]
     assert approval.requested_action == 'flutter pub get'
     from factory.approvals import ApprovalService
     ApprovalService(o.db).resolve(approval, True, 'test approval')
