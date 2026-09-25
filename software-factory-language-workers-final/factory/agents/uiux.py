@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+import base64
 from factory.agents.base import Agent
 from factory.models import AgentResult
 SCHEMA={'type':'object','properties':{'design_summary':{'type':'string'},'design_system':{'type':'string'},'screens':{'type':'array','items':{'type':'string'}},'user_flow':{'type':'string'},'html_preview':{'type':'string'}},'required':['design_summary','design_system','screens','user_flow','html_preview']}
@@ -21,7 +22,15 @@ Previous design:
 {existing[-12000:]}
 
 Create a professional UI/UX direction. Infer platform and audience. Define information architecture, navigation, key screens, empty/loading/error/success states, responsive behavior, accessibility, typography, spacing, colors, components and interactions. Avoid generic AI-looking design. Return a self-contained HTML preview with inline CSS only, polished enough to guide implementation."""
-        try: data=self.provider.generate_json(self.instructions,prompt,SCHEMA,timeout=context.timeout)
+        images = None
+        reference = d / 'reference.png'
+        if reference.is_file():
+            try:
+                images = [{'mime_type': 'image/png', 'data': base64.b64encode(reference.read_bytes()).decode('ascii')}]
+                prompt += "\nA reference screenshot is attached. Treat it as the visual source of truth for the requested direction; preserve its important structure and intent while improving implementation-ready details."
+            except OSError:
+                images = None
+        try: data=self.provider.generate_json(self.instructions,prompt,SCHEMA,timeout=context.timeout,images=images)
         except Exception as e: return AgentResult(success=False,agent_name=self.name,summary='UI/UX design failed.',errors=[str(e)],next_action='fix')
         if getattr(self.provider,'is_mock',False):
             data={'design_summary':'Clean professional MVP interface focused on the primary user journey.','design_system':'Responsive layout, clear hierarchy, accessible contrast, consistent spacing and reusable components.','screens':['Home / Dashboard','Primary workflow','Settings / Help'],'user_flow':'Open → understand state → perform primary action → receive clear success/error feedback.','html_preview':'<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Inter,Arial,sans-serif;background:#f5f7fb;margin:0;padding:40px;color:#172033}.card{max-width:900px;margin:auto;background:white;border-radius:20px;padding:32px;box-shadow:0 12px 40px #0001}.btn{display:inline-block;padding:12px 18px;border-radius:10px;background:#172033;color:white}</style></head><body><div class="card"><h1>Product Preview</h1><p>Professional responsive interface preview.</p><span class="btn">Primary action</span></div></body></html>'}
