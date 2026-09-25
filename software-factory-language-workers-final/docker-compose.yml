@@ -1,0 +1,78 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    command: ["factory", "telegram"]
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - factory_data:/data
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    logging:
+      options: {max-size: "10m", max-file: "3"}
+
+  worker-python:
+    build:
+      context: .
+      dockerfile: Dockerfile.python-worker
+    command: ["factory", "worker"]
+    restart: unless-stopped
+    env_file: .env
+    environment: {WORKER_TYPE: python}
+    volumes: ["factory_data:/data"]
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    logging:
+      options: {max-size: "20m", max-file: "5"}
+
+  worker-node:
+    build:
+      context: .
+      dockerfile: Dockerfile.node-worker
+    command: ["factory", "worker"]
+    restart: unless-stopped
+    env_file: .env
+    environment: {WORKER_TYPE: node}
+    volumes: ["factory_data:/data"]
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    logging:
+      options: {max-size: "20m", max-file: "5"}
+
+  worker-java:
+    build:
+      context: .
+      dockerfile: Dockerfile.java-worker
+    command: ["factory", "worker"]
+    restart: unless-stopped
+    env_file: .env
+    environment: {WORKER_TYPE: java}
+    volumes: ["factory_data:/data"]
+    mem_limit: 3g
+    cpus: 2.0
+    pids_limit: 256
+    logging:
+      options: {max-size: "20m", max-file: "5"}
+
+  worker-flutter:
+    build:
+      context: .
+      dockerfile: Dockerfile.flutter-worker
+    command: ["factory", "worker"]
+    restart: unless-stopped
+    env_file: .env
+    environment: {WORKER_TYPE: flutter}
+    volumes: ["factory_data:/data"]
+    mem_limit: 4g
+    cpus: 3.0
+    pids_limit: 256
+    logging:
+      options: {max-size: "20m", max-file: "5"}
+
+volumes:
+  factory_data:

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "software-factory"
+version = "0.1.0"
+description = "Multi-Agent Software Factory (human-supervised)"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6",
+    "typer>=0.12",
+    "python-dotenv>=1.0",
+    "python-telegram-bot>=21.0",
+]
+
+[project.scripts]
+factory = "main:app"
+
+[tool.setuptools]
+packages = ["factory", "factory.agents", "factory.adapters", "factory.providers", "factory.tools", "factory.workflows", "factory.integrations", "factory.integrations.telegram"]
+py-modules = ["main"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
