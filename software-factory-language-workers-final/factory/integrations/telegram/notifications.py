@@ -2,6 +2,7 @@ from __future__ import annotations
 import json, urllib.request
 from .formatter import project_status, approval_text
 from .keyboards import approval_keyboard
+from factory.roles import tag_for
 
 class TelegramNotifier:
     """Synchronous notifier safe to call from the orchestrator worker thread."""
@@ -25,6 +26,12 @@ class TelegramNotifier:
     def design_ready(self, project, approval, result):
         data=result.detailed_output if isinstance(result.detailed_output,dict) else {}
         self._send(f"🎨 <b>UI/UX DESIGN READY</b>\n\n{project_status(project)}\n\n<b>Summary:</b> {data.get('design_summary','')}\n<b>Screens:</b> {', '.join(data.get('screens',[]))}\n\nPreview: <code>docs/design/preview.html</code>\n\nاضغط APPROVE أو اكتب «تمام». ", {'inline_keyboard':[[{'text':'✅ APPROVE DESIGN','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT DESIGN','callback_data':f'apr:r:{approval.id}'}]]})
+
+    def agent_result(self, project, result):
+        tag = tag_for(getattr(result, 'agent_name', ''))
+        summary = getattr(result, 'summary', '') or ('completed' if getattr(result, 'success', False) else 'reported a problem')
+        icon = '✅' if getattr(result, 'success', False) else '⚠️'
+        self._send(f'{icon} <b>{tag}</b> {summary}\\n\\n{project_status(project)}')
 
     def ready_summary(self, project, tasks):
         self._send(f'✅ <b>PROJECT READY FOR HUMAN REVIEW</b>\n\n{project_status(project)}\n\nTasks: {len(tasks)}')
