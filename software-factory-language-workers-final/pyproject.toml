@@ -25,6 +25,7 @@ py-modules = ["main"]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
+    "PyYAML>=6.0",
 ]
 
 [tool.pytest.ini_options]
