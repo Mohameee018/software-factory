@@ -40,6 +40,11 @@ def test_mock_workflow_reaches_human_review(tmp_path):
     o=Orchestrator(Database(settings.db_path),settings)
     p=o.create_project('Demo','Build a test project')
     state=o.run(p.id,mock=True)
+    assert state.current_state==WorkflowState.WAITING_FOR_DESIGN_APPROVAL
+    from factory.approvals import ApprovalService
+    approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
+    ApprovalService(o.db).resolve(approval, True, 'test design')
+    state=o.run(p.id,mock=True)
     assert state.current_state==WorkflowState.READY_FOR_HUMAN
     assert all(t.status==TaskStatus.DONE for t in o.db.list_tasks(p.id))
 
@@ -66,6 +71,10 @@ def test_flutter_unavailable_blocks_real_run_with_clear_error(tmp_path, monkeypa
     settings.ensure_directories()
     o=Orchestrator(Database(settings.db_path),settings)
     p=o.create_project('Clothes Store','Build a Flutter app')
+    from factory.approvals import ApprovalService
+    o.run(p.id, mock=False)
+    approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
+    ApprovalService(o.db).resolve(approval, True, 'test design')
 
     from factory.tools.shell import CommandResult
     def fake_run(role, command, cwd, timeout=120):
@@ -297,6 +306,10 @@ def test_flutter_requires_dart_and_can_be_retried_after_sdk_install(tmp_path, mo
     settings=Settings(tmp_path/'factory.db',tmp_path/'workspaces','INFO','openai','model','dummy',3,10,10,mode='real')
     settings.ensure_directories(); o=Orchestrator(Database(settings.db_path),settings)
     p=o.create_project('Clothes Store','Build a Flutter app')
+    from factory.approvals import ApprovalService
+    o.run(p.id, mock=False)
+    approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
+    ApprovalService(o.db).resolve(approval, True, 'test design')
     from factory.tools.shell import CommandResult
     calls=[]
     def fake_run(role, command, cwd, timeout=120):
@@ -316,6 +329,7 @@ def test_restart_recovers_in_progress_task(tmp_path):
     p=o.create_project('p','Build a test project')
     t=Task(project_id=p.id,title='Interrupted',description='resume',status=TaskStatus.IN_PROGRESS)
     o.db.save_task(t)
+    state=o.db.get_state(p.id); state.current_state=WorkflowState.IMPLEMENTATION; o.db.save_state(state); p.current_state=WorkflowState.IMPLEMENTATION; o.db.save_project(p)
     o.run(p.id,mock=True)
     assert o.db.get_task(t.id).status == TaskStatus.DONE
 
