@@ -7,7 +7,7 @@ class MockProvider(AIProvider):
     def __init__(self, model='mock'): self.model = model
     def generate(self, system: str, prompt: str, *, timeout: int | None = None) -> LLMResponse:
         return LLMResponse('MOCK_PROVIDER_RESPONSE', self.model)
-    def generate_json(self, system: str, prompt: str, schema: dict, *, timeout: int | None = None) -> dict:
+    def generate_json(self, system: str, prompt: str, schema: dict, *, timeout: int | None = None, images=None) -> dict:
         props = schema.get('properties', {})
         out = {}
         for key, spec in props.items():
