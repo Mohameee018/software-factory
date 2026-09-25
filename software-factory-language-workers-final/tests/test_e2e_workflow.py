@@ -25,21 +25,19 @@ class DeterministicE2EProvider(AIProvider):
     def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
         if 'Design professional' in system:
             return {'design_summary':'Test design.','design_system':'Simple responsive design.','screens':['Home'],'user_flow':'Open to action.','html_preview':'<html><body><h1>Test</h1></body></html>'}
-        if 'Design professional' in system:
-            return {'design_summary':'Clothes Store UI.','design_system':'Responsive retail UI.','screens':['Home','Details','Cart'],'user_flow':'Browse to cart.','html_preview':'<html><body><h1>Clothes Store</h1></body></html>'}
-        if 'Design professional' in system:
-            return {'design_summary':'Professional clothing-store mobile UI.','design_system':'Clean responsive retail design with consistent spacing and accessible contrast.','screens':['Home','Categories','Product Details','Cart'],'user_flow':'Browse → details → add to cart → checkout.','html_preview':'<!doctype html><html><body><h1>Clothes Store</h1></body></html>'}
         if 'Planner Agent' in system or 'natural-language request' in system:
             return {'PRD':'# PRD\nBuild a local sample.','MVP':'# MVP\nPassing tests.','ARCHITECTURE':'# Architecture\nSimple Python package.','REQUIREMENTS':'# Requirements\n- Python project','TASKS':'# Tasks\n- Build sample project','ACCEPTANCE_CRITERIA':'# Acceptance\n- Tests pass','RISKS':'# Risks\n- None known'}
         if 'Analyzer Agent' in system:
             return {'contradictions':[],'missing_requirements':[],'ambiguities':[],'missing_acceptance_criteria':[],'technical_risks':[],'security_risks':[],'dependency_issues':[],'blocking':False,'summary':'Analysis passed.'}
+        if 'Compare the implemented application' in system:
+            return {'findings':[],'summary':'UI/UX review passed.'}
         if 'Review actual generated' in system:
             self.review_calls += 1
             if self.review_calls == 1:
                 return {'findings':[{'severity':'MEDIUM','category':'maintainability','file':'app.py','line':1,'description':'Add a module docstring.','evidence':'No module docstring.','suggested_fix':'Add a short module docstring.'}],'summary':'One review finding.'}
             return {'findings':[],'summary':'Review passed.'}
         if 'software developer' in system:
-            if 'Fix code review findings' in prompt:
+            if 'Fix code review findings' in prompt or 'Fix UI/UX review findings' in prompt:
                 return {'actions':[{'op':'write','path':'app.py','content':'"""Sample application."""\n\nVALUE = 1\n'}],'summary':'Applied review fix.'}
             if 'TEST/IMPLEMENTATION FAILURE' in prompt:
                 return {'actions':[{'op':'write','path':'test_app.py','content':'def test_value():\n    assert 1 == 1\n'}],'summary':'Fixed the failing test.'}
@@ -51,7 +49,7 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     settings.ensure_directories()
     o=Orchestrator(Database(settings.db_path),settings)
     provider=DeterministicE2EProvider()
-    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(provider); o.agents['uiux_reviewer']=UIUXReviewerAgent(provider); o.agents['uiux']=UIUXAgent(provider); o.agents['uiux_reviewer']=UIUXReviewerAgent(provider); o.agents['release']=ReleaseAgent()
+    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(provider); o.agents['uiux_reviewer']=UIUXReviewerAgent(provider); o.agents['release']=ReleaseAgent()
     monkeypatch.setattr(registry, 'ADAPTERS', [LocalPythonAdapter(), *registry.ADAPTERS])
     p=o.create_project('E2E','Build a deterministic Python sample')
     state=o.run(p.id, mock=False)
