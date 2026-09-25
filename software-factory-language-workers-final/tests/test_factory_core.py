@@ -232,7 +232,7 @@ def test_e2e_real_mode_fake_llm_and_fake_flutter_adapter_reaches_review(tmp_path
     from factory.adapters.base import ProjectAdapter
     from factory.adapters.registry import ADAPTERS
     from factory.providers.base import LLMResponse
-    from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent
+    from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent, UIUXAgent, UIUXReviewerAgent
     from factory.tools.shell import CommandResult
 
     class FakeFlutter(ProjectAdapter):
