@@ -95,9 +95,18 @@ class TelegramHandlers:
         try: _,action,aid=q.data.split(':',2); a=self.service.db.get_approval(aid)
         except Exception: return
         if not a or a.status.value!='PENDING': await q.edit_message_text('Approval is no longer pending.'); return
-        ApprovalService(self.service.db).resolve(a,action=='a',f'Telegram user {update.effective_user.id}')
-        await q.edit_message_text('APPROVED' if action=='a' else 'REJECTED')
-        if action=='a': self._enqueue(a.project_id, a.task_id, priority=100)
+        approved = action == 'a'
+        ApprovalService(self.service.db).resolve(a,approved,f'Telegram user {update.effective_user.id}')
+        await q.edit_message_text('APPROVED' if approved else 'REJECTED')
+        p = self.service.db.get_project(a.project_id)
+        if p and a.requested_action == 'design_approval':
+            if approved:
+                self._enqueue(a.project_id, priority=100)
+            else:
+                self.service.set_state(p, WorkflowState.DESIGNING)
+                self._enqueue(a.project_id, priority=100)
+        elif approved:
+            self._enqueue(a.project_id, a.task_id, priority=100)
     def _project(self,u,c):
         pid=c.args[0] if c.args else c.user_data.get('active_project_id')
         effective_user = getattr(u,'effective_user',None) if u is not None else None
