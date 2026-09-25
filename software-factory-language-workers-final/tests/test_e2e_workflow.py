@@ -4,7 +4,7 @@ from factory.database import Database
 from factory.orchestrator import Orchestrator
 from factory.models import WorkflowState
 from factory.providers.base import LLMResponse, AIProvider
-from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent
+from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent, UIUXAgent, UIUXReviewerAgent, ReleaseAgent
 from factory.adapters import registry
 from factory.adapters.base import ProjectAdapter
 
@@ -22,7 +22,7 @@ class LocalPythonAdapter(ProjectAdapter):
 class DeterministicE2EProvider(AIProvider):
     def __init__(self): self.review_calls=0
     def generate(self, system, prompt, *, timeout=None): return LLMResponse('', 'e2e')
-    def generate_json(self, system, prompt, schema, *, timeout=None):
+    def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
         if 'Design professional' in system:
             return {'design_summary':'Test design.','design_system':'Simple responsive design.','screens':['Home'],'user_flow':'Open to action.','html_preview':'<html><body><h1>Test</h1></body></html>'}
         if 'Design professional' in system:
@@ -49,12 +49,7 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     settings.ensure_directories()
     o=Orchestrator(Database(settings.db_path),settings)
     provider=DeterministicE2EProvider()
-    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=__import__('factory.agents',fromlist=['UIUXAgent']).UIUXAgent(provider); o.agents['uiux_reviewer']=__import__('factory.agents',fromlist=['UIUXReviewerAgent']).UIUXReviewerAgent(provider); o.agents['release']=__import__('factory.agents',fromlist=['ReleaseAgent']).ReleaseAgent()
-    from factory.agents import UIUXAgent, UIUXReviewerAgent
-    o.agents['uiux']=UIUXAgent(provider)
-    o.agents['uiux_reviewer']=UIUXReviewerAgent(provider)
-    from factory.agents import ReleaseAgent
-    o.agents['release']=ReleaseAgent()
+    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(provider); o.agents['uiux_reviewer']=UIUXReviewerAgent(provider); o.agents['release']=ReleaseAgent()
     monkeypatch.setattr(registry, 'ADAPTERS', [LocalPythonAdapter(), *registry.ADAPTERS])
     p=o.create_project('E2E','Build a deterministic Python sample')
     state=o.run(p.id, mock=False)
