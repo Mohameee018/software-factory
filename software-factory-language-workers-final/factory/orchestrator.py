@@ -289,12 +289,6 @@ class Orchestrator:
                 continue
             if s==WorkflowState.DESIGN_APPROVED:
                 self.set_state(p,WorkflowState.PLANNING); continue
-            if s==WorkflowState.IDEA:
-                if p.project_type == ProjectType.FLUTTER and not effective_mock:
-                    if not self._prepare_flutter_project(p, state):
-                        self.set_state(p, WorkflowState.BLOCKED)
-                        continue
-                self.set_state(p,WorkflowState.PLANNING); continue
             if s==WorkflowState.PLANNING:
                 r=self.agents['planner'].run(ctx); self.record(state,r); self.set_state(p,WorkflowState.DOCUMENTATION if r.success else WorkflowState.BLOCKED); continue
             if s==WorkflowState.DOCUMENTATION: self.set_state(p,WorkflowState.ANALYSIS); continue
