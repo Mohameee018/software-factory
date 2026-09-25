@@ -31,8 +31,12 @@ class TelegramHandlers:
                         await update.effective_message.reply_text('✅ التصميم اتوافق عليه. بدأت مرحلة التخطيط والتنفيذ.')
                     return
                 t=self.service.add_feedback(pid,update.effective_message.text)
-                await update.effective_message.reply_text(f'Feedback saved as task <code>{t.id}</code>. Resuming the factory.',parse_mode='HTML')
-                await asyncio.to_thread(self.service.run,pid,False,False)
+                if t:
+                    await update.effective_message.reply_text(f'Feedback saved as task <code>{t.id}</code>. Resuming the factory.',parse_mode='HTML')
+                else:
+                    await update.effective_message.reply_text('🎨 التعديل اتسجل. برجع الـUI/UX Agent يعيد التصميم.')
+                    self._enqueue(pid,priority=100)
+                return
             return
         name='Telegram Project'
         p=self.service.create_project(name, update.effective_message.text)
