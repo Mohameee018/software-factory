@@ -6,7 +6,7 @@ import re
 from factory.models import *
 from factory.state import transition
 from factory.database import Database
-from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent
+from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent, UIUXReviewerAgent
 from factory.approvals import ApprovalService
 from factory.adapters.registry import detect, by_name
 from factory.project_detection import detect_project_type
@@ -29,7 +29,7 @@ class Orchestrator:
         self.agents = {
             'planner': PlannerAgent(provider), 'analyzer': AnalyzerAgent(provider),
             'developer': DeveloperAgent(provider), 'tester': TesterAgent(),
-            'reviewer': ReviewerAgent(provider), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(provider)
+            'reviewer': ReviewerAgent(provider), 'uiux_reviewer': UIUXReviewerAgent(provider), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(provider)
         }
 
     def provider_info(self):
@@ -172,6 +172,13 @@ class Orchestrator:
         t.retry_count += 1; t.updated_at=datetime.now(timezone.utc); self.db.save_task(t)
         return t
 
+    def _get_ux_fix_task(self,p,description):
+        candidates=[t for t in self.db.list_tasks(p.id) if t.title=='Fix UI/UX review findings']
+        t=candidates[-1] if candidates else self._add_fix_task(p,'Fix UI/UX review findings',description)
+        t.description=description; t.failure_reason=description; t.status=TaskStatus.PENDING
+        t.retry_count += 1; t.updated_at=datetime.now(timezone.utc); self.db.save_task(t)
+        return t
+
     def _get_test_fix_task(self,p,description):
         # Keep one persistent QA-fix task so retry_count remains meaningful across
         # repeated test cycles and unrelated implementation tasks are not consumed.
@@ -256,7 +263,7 @@ class Orchestrator:
             if task.status == TaskStatus.IN_PROGRESS:
                 task.status=TaskStatus.PENDING; task.updated_at=datetime.now(timezone.utc); self.db.save_task(task); recovered=True
                 self.db.event(WorkflowEvent(project_id=p.id,event_type='TASK_RECOVERED',task_id=task.id,details={'reason':'workflow restart/interruption'}))
-        if recovered and p.current_state in (WorkflowState.TESTING, WorkflowState.REVIEWING, WorkflowState.SECURITY_REVIEW):
+        if recovered and p.current_state in (WorkflowState.TESTING, WorkflowState.REVIEWING, WorkflowState.UX_REVIEW, WorkflowState.SECURITY_REVIEW):
             self.set_state(p, WorkflowState.IMPLEMENTATION)
             p=self.db.get_project(pid)
         if p.current_state == WorkflowState.BLOCKED and p.project_type == ProjectType.FLUTTER and not effective_mock:
@@ -346,11 +353,31 @@ class Orchestrator:
                             f=ReviewFinding.model_validate(raw); self.db.finding(p.id,f); state.review_findings.append(f.id)
                         except Exception: pass
                     self.db.save_state(state)
-                if r.success: self.set_state(p,WorkflowState.SECURITY_REVIEW)
+                if r.success: self.set_state(p,WorkflowState.UX_REVIEW)
                 else:
                     desc='\n'.join(f"{x.get('severity')}: {x.get('file')}:{x.get('line')} {x.get('description')} Evidence: {x.get('evidence')} Fix: {x.get('suggested_fix')}" for x in (r.detailed_output or {}).get('findings',[])) if isinstance(r.detailed_output,dict) else '\n'.join(r.errors)
                     t=self._get_review_fix_task(p,desc)
                     self.set_state(p,WorkflowState.BLOCKED if t.retry_count >= self.settings.max_retries else WorkflowState.FIXING)
+                continue
+            if s==WorkflowState.UX_REVIEW:
+                if effective_mock:
+                    r=AgentResult(success=True,agent_name='UI/UX Reviewer',summary='Mock UI/UX review passed.',next_action='security')
+                else:
+                    r=self.agents['uiux_reviewer'].run(ctx)
+                self.record(state,r)
+                if r.detailed_output and isinstance(r.detailed_output,dict):
+                    for raw in r.detailed_output.get('findings',[]):
+                        try:
+                            f=ReviewFinding.model_validate(raw); self.db.finding(p.id,f); state.review_findings.append(f.id)
+                        except Exception: pass
+                    self.db.save_state(state)
+                if r.success:
+                    self.set_state(p,WorkflowState.SECURITY_REVIEW)
+                else:
+                    findings=(r.detailed_output or {}).get('findings',[]) if isinstance(r.detailed_output,dict) else []
+                    desc='\\n'.join(f"{x.get('severity')}: {x.get('file')}:{x.get('line')} {x.get('description')} Evidence: {x.get('evidence')} Fix: {x.get('suggested_fix')}" for x in findings) or '\\n'.join(r.errors)
+                    t=self._get_ux_fix_task(p,desc)
+                    self.set_state(p,WorkflowState.BLOCKED if t.retry_count>=self.settings.max_retries else WorkflowState.FIXING)
                 continue
             if s==WorkflowState.SECURITY_REVIEW:
                 r=AgentResult(success=True,agent_name='Security Reviewer',summary='Mock security review.',next_action='ready') if effective_mock else self.agents['security'].run(ctx)
