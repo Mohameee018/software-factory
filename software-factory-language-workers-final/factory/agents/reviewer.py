@@ -8,6 +8,10 @@ class ReviewerAgent(Agent):
     name='Code Reviewer'; role='reviewer'; instructions='Review actual generated/modified source code against requirements and acceptance criteria. Do not modify source. Return precise evidence with file and line when possible.'
     def __init__(self,provider): self.provider=provider
     def run(self,context,task=None):
+        team_context = ''
+        context_file = Path(context.workspace) / 'docs' / 'TEAM_CONTEXT.md'
+        if context_file.exists():
+            team_context = redact_secrets(context_file.read_text(encoding='utf-8', errors='ignore')[-12000:])
         files=[]
         for p in Path(context.workspace).rglob('*'):
             if p.is_file() and '.git' not in p.parts:
