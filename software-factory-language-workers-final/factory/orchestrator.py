@@ -6,7 +6,7 @@ import re
 from factory.models import *
 from factory.state import transition
 from factory.database import Database
-from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent
+from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent
 from factory.approvals import ApprovalService
 from factory.adapters.registry import detect, by_name
 from factory.project_detection import detect_project_type
@@ -29,7 +29,7 @@ class Orchestrator:
         self.agents = {
             'planner': PlannerAgent(provider), 'analyzer': AnalyzerAgent(provider),
             'developer': DeveloperAgent(provider), 'tester': TesterAgent(),
-            'reviewer': ReviewerAgent(provider), 'security': SecurityAgent(), 'release': ReleaseAgent()
+            'reviewer': ReviewerAgent(provider), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(provider)
         }
 
     def provider_info(self):
@@ -194,6 +194,12 @@ class Orchestrator:
         self.db.event(WorkflowEvent(project_id=pid,event_type='FEEDBACK_RECEIVED',task_id=t.id,details={'feedback':feedback}))
         if p.current_state==WorkflowState.READY_FOR_HUMAN:
             self.set_state(p,WorkflowState.CHANGES_REQUESTED); self.set_state(p,WorkflowState.TASK_CREATION)
+        elif p.current_state==WorkflowState.WAITING_FOR_DESIGN_APPROVAL:
+            self.set_state(p,WorkflowState.DESIGNING)
+            try:
+                from pathlib import Path
+                f=Path(p.workspace_path)/'docs'/'DESIGN_FEEDBACK.md'; f.parent.mkdir(parents=True,exist_ok=True); f.open('a',encoding='utf-8').write('\n\n'+feedback+'\n')
+            except Exception: pass
         return t
 
     def retry(self,pid):
@@ -262,6 +268,27 @@ class Orchestrator:
                 p = self.db.get_project(pid)
         for _ in range(self.settings.max_iterations):
             p=self.db.get_project(pid); state=self.db.get_state(pid) or state; state.iteration_count+=1; self.db.save_state(state); s=p.current_state
+            if s==WorkflowState.IDEA:
+                self.set_state(p,WorkflowState.DESIGNING); continue
+            if s==WorkflowState.DESIGNING:
+                r=self.agents['uiux'].run(ctx); self.record(state,r)
+                if r.success:
+                    approval=ApprovalService(self.db).request(p.id,'design_approval','UI/UX design is ready. Approve the design before implementation.',Severity.MEDIUM,files=['docs/DESIGN.md','docs/design/preview.html'])
+                    state.approvals.append(approval.id); self.db.save_state(state)
+                    if self.notifier:
+                        try:self.notifier.design_ready(p,approval,r)
+                        except Exception:pass
+                    self.set_state(p,WorkflowState.WAITING_FOR_DESIGN_APPROVAL)
+                else:self.set_state(p,WorkflowState.BLOCKED)
+                continue
+            if s==WorkflowState.WAITING_FOR_DESIGN_APPROVAL:
+                approvals=[a for a in self.db.list_approvals(p.id) if a.requested_action=='design_approval']; latest=approvals[-1] if approvals else None
+                if latest and latest.status==ApprovalStatus.APPROVED:self.set_state(p,WorkflowState.DESIGN_APPROVED)
+                elif latest and latest.status==ApprovalStatus.REJECTED:self.set_state(p,WorkflowState.DESIGNING)
+                else:return state
+                continue
+            if s==WorkflowState.DESIGN_APPROVED:
+                self.set_state(p,WorkflowState.PLANNING); continue
             if s==WorkflowState.IDEA:
                 if p.project_type == ProjectType.FLUTTER and not effective_mock:
                     if not self._prepare_flutter_project(p, state):
