@@ -27,6 +27,8 @@ class DeterministicE2EProvider(AIProvider):
             return {'design_summary':'Test design.','design_system':'Simple responsive design.','screens':['Home'],'user_flow':'Open to action.','html_preview':'<html><body><h1>Test</h1></body></html>'}
         if 'Design professional' in system:
             return {'design_summary':'Clothes Store UI.','design_system':'Responsive retail UI.','screens':['Home','Details','Cart'],'user_flow':'Browse to cart.','html_preview':'<html><body><h1>Clothes Store</h1></body></html>'}
+        if 'Design professional' in system:
+            return {'design_summary':'Professional clothing-store mobile UI.','design_system':'Clean responsive retail design with consistent spacing and accessible contrast.','screens':['Home','Categories','Product Details','Cart'],'user_flow':'Browse → details → add to cart → checkout.','html_preview':'<!doctype html><html><body><h1>Clothes Store</h1></body></html>'}
         if 'Planner Agent' in system or 'natural-language request' in system:
             return {'PRD':'# PRD\nBuild a local sample.','MVP':'# MVP\nPassing tests.','ARCHITECTURE':'# Architecture\nSimple Python package.','REQUIREMENTS':'# Requirements\n- Python project','TASKS':'# Tasks\n- Build sample project','ACCEPTANCE_CRITERIA':'# Acceptance\n- Tests pass','RISKS':'# Risks\n- None known'}
         if 'Analyzer Agent' in system:
