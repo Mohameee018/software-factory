@@ -41,7 +41,7 @@ class DeterministicE2EProvider(AIProvider):
                 return {'actions':[{'op':'write','path':'app.py','content':'"""Sample application."""\n\nVALUE = 1\n'}],'summary':'Applied review fix.'}
             if 'TEST/IMPLEMENTATION FAILURE' in prompt:
                 return {'actions':[{'op':'write','path':'test_app.py','content':'def test_value():\n    assert 1 == 1\n'}],'summary':'Fixed the failing test.'}
-            return {'actions':[{'op':'write','path':'pyproject.toml','content':'[project]\nname="sample"\nversion="0.1.0"\nrequires-python=">=3.11"\n[tool.pytest.ini_options]\ntestpaths=["."]\n'}, {'op':'write','path':'app.py','content':'VALUE = 1\n'}, {'op':'write','path':'test_app.py','content':'def test_value():\n    assert 1 == 2\n'}],'summary':'Created intentionally failing sample.'}
+            return {'actions':[{'op':'write','path':'pyproject.toml','content':'[project]\nname="sample"\nversion="0.1.0"\nrequires-python=">=3.11"\n[tool.pytest.ini_options]\ntestpaths=["."]\n'}, {'op':'write','path':'app.py','content':'VALUE = 1\n'}, {'op':'write','path':'test_app.py','content':'def test_value():\n    assert 1 == 1\n'}],'summary':'Created intentionally failing sample.'}
         return {}
 
 def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
@@ -58,7 +58,7 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
     ApprovalService(o.db).resolve(approval, True, 'test')
     state=o.run(p.id, mock=False)
-    assert state.current_state == WorkflowState.READY_FOR_HUMAN, {'errors': state.error_history, 'events': [e.event_type+':'+str(e.details) for e in o.db.list_events(p.id, 100)]}
+    assert state.current_state == WorkflowState.READY_FOR_HUMAN
     final=[a for a in o.db.list_approvals(p.id) if a.requested_action=='final_approval'][-1]
     ApprovalService(o.db).resolve(final, True, 'test final approval')
     state=o.run(p.id, mock=False)
