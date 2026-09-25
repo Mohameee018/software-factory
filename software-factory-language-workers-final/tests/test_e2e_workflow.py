@@ -49,11 +49,12 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     settings.ensure_directories()
     o=Orchestrator(Database(settings.db_path),settings)
     provider=DeterministicE2EProvider()
-    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider)
-    from factory.agents import UIUXAgent
+    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=__import__('factory.agents',fromlist=['UIUXAgent']).UIUXAgent(provider); o.agents['uiux_reviewer']=__import__('factory.agents',fromlist=['UIUXReviewerAgent']).UIUXReviewerAgent(provider); o.agents['release']=__import__('factory.agents',fromlist=['ReleaseAgent']).ReleaseAgent()
+    from factory.agents import UIUXAgent, UIUXReviewerAgent
     o.agents['uiux']=UIUXAgent(provider)
-    from factory.agents import UIUXAgent
-    o.agents['uiux']=UIUXAgent(provider)
+    o.agents['uiux_reviewer']=UIUXReviewerAgent(provider)
+    from factory.agents import ReleaseAgent
+    o.agents['release']=ReleaseAgent()
     monkeypatch.setattr(registry, 'ADAPTERS', [LocalPythonAdapter(), *registry.ADAPTERS])
     p=o.create_project('E2E','Build a deterministic Python sample')
     state=o.run(p.id, mock=False)
@@ -71,6 +72,10 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     assert any(e.event_type == 'STATE_CHANGED' and e.state == 'FIXING' for e in tests)
     assert any('Fix code review findings' in t.title for t in o.db.list_tasks(p.id))
     assert (Path(p.workspace_path)/'app.py').read_text(encoding='utf-8').startswith('"""')
+    release=Path(p.workspace_path)/'release'/f'{p.id}-release.zip'
+    manifest=Path(p.workspace_path)/'release'/'RELEASE_MANIFEST.json'
+    assert release.is_file() and release.stat().st_size > 0
+    assert manifest.is_file()
 
 class FakeFlutterAdapter(ProjectAdapter):
     name='fake-flutter'
