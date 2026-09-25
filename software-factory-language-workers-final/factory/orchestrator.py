@@ -375,6 +375,9 @@ class Orchestrator:
 
     def record(self,state,r):
         self.db.agent_result(state.project_id,r); state.agent_results.append(r.agent_name)
+        if self.notifier:
+            try: self.notifier.agent_result(self.db.get_project(state.project_id), r)
+            except Exception: pass
         for path in r.files_created:
             self.db.event(WorkflowEvent(project_id=state.project_id,event_type='FILE_CREATED',task_id=r.task_id,details={'path':path,'agent':r.agent_name}))
         for path in r.files_modified:
