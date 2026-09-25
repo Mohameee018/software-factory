@@ -8,6 +8,7 @@ from factory.adapters.python import PythonAdapter
 from factory.database import Database
 from factory.orchestrator import Orchestrator
 from factory.config import Settings
+from factory.providers.mock import MockProvider
 
 def test_invalid_transition_rejected():
     with pytest.raises(InvalidTransition):
