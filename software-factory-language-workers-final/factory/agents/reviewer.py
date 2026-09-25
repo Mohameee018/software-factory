@@ -13,7 +13,7 @@ class ReviewerAgent(Agent):
             if p.is_file() and '.git' not in p.parts:
                 text=redact_secrets(p.read_text(encoding='utf-8',errors='ignore')[:16000])
                 files.append(f'FILE {p.relative_to(context.workspace)}\n{text}')
-        prompt='\n\n'.join(files[:100])
+        prompt='SHARED TEAM CONTEXT:\n'+team_context+'\n\n'+'\n\n'.join(files[:100])
         try:data=self.provider.generate_json(self.instructions,prompt,SCHEMA,timeout=context.timeout)
         except Exception as e:return AgentResult(success=False,agent_name=self.name,errors=[str(e)],next_action='fix')
         findings=[]
