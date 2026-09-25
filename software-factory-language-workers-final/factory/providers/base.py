@@ -46,8 +46,10 @@ class AIProvider(ABC):
             if key in value: check(value[key], spec, key)
         return value
 
-    def generate_json(self, system: str, prompt: str, schema: dict[str, Any], *, timeout: int | None = None) -> dict[str, Any]:
+    def generate_json(self, system: str, prompt: str, schema: dict[str, Any], *, timeout: int | None = None, images: list[dict[str, str]] | None = None) -> dict[str, Any]:
         import json, re
+        if images and hasattr(self, 'generate_json_with_images'):
+            return self.generate_json_with_images(system, prompt, schema, images=images, timeout=timeout)
         response = self.generate(system, prompt + "\nReturn ONLY valid JSON matching this schema:\n" + json.dumps(schema), timeout=timeout)
         text = response.text.strip()
         if text.startswith("```"):
