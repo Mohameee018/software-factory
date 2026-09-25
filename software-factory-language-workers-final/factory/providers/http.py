@@ -63,11 +63,31 @@ class OpenAICompatibleProvider(HTTPProvider):
             raise ValueError(f'Provider returned invalid structured JSON: {text[:500]}') from exc
         return self.validate_structured(value, schema)
 
+    def generate_json_with_images(self, system, prompt, schema, images, *, timeout=None):
+        user_content=[{'type':'text','text':prompt + '\\nJSON schema:\\n' + json.dumps(schema)}]
+        user_content += [{'type':'image_url','image_url':{'url':'data:%s;base64,%s' % (x['mime_type'],x['data'])}} for x in images]
+        body={'model':self.model,'messages':[{'role':'system','content':system},{'role':'user','content':user_content}], 'response_format': {'type':'json_object'}}
+        data=self._request(f'{self.base_url}/chat/completions',body,{'Authorization':f'Bearer {self.api_key}','Content-Type':'application/json'},timeout)
+        text=((data.get('choices') or [{}])[0].get('message') or {}).get('content')
+        if not isinstance(text,str) or not text.strip(): raise ValueError('Provider returned empty structured output')
+        try: value=json.loads(text)
+        except json.JSONDecodeError as exc: raise ValueError(f'Provider returned invalid structured JSON: {text[:500]}') from exc
+        return self.validate_structured(value,schema)
+
 class AnthropicProvider(HTTPProvider):
-    def generate(self, system, prompt, *, timeout=None):
-        body = {'model': self.model, 'max_tokens': 8192, 'system': system, 'messages': [{'role':'user','content':prompt}]}
-        data = self._request(f'{self.base_url}/messages', body, {'x-api-key':self.api_key,'anthropic-version':'2023-06-01','content-type':'application/json'}, timeout)
-        text = ''.join(x.get('text','') for x in data.get('content',[]) if x.get('type')=='text')
-        usage = data.get('usage') or {}
-        self.last_usage = usage
-        return LLMResponse(text, data.get('model', self.model), usage.get('input_tokens'), usage.get('output_tokens'), data)
+    def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
+        if not images:
+            response=self.generate(system,prompt + '\\nReturn ONLY valid JSON matching this schema:\\n' + json.dumps(schema),timeout=timeout)
+            try: value=json.loads(response.text.strip())
+            except json.JSONDecodeError as exc: raise ValueError(f'Provider returned invalid structured JSON: {response.text[:500]}') from exc
+            return self.validate_structured(value,schema)
+        content=[{'type':'text','text':prompt + '\\nReturn ONLY valid JSON matching this schema:\\n' + json.dumps(schema)}]
+        for x in images:
+            content.append({'type':'image','source':{'type':'base64','media_type':x['mime_type'],'data':x['data']}})
+        body={'model':self.model,'max_tokens':8192,'system':system,'messages':[{'role':'user','content':content}]}
+        data=self._request(f'{self.base_url}/messages',body,{'x-api-key':self.api_key,'anthropic-version':'2023-06-01','content-type':'application/json'},timeout)
+        text=''.join(x.get('text','') for x in data.get('content',[]) if x.get('type')=='text').strip()
+        if not text: raise ValueError('Provider returned empty structured output')
+        try: value=json.loads(text)
+        except json.JSONDecodeError as exc: raise ValueError(f'Provider returned invalid structured JSON: {text[:500]}') from exc
+        return self.validate_structured(value,schema)
