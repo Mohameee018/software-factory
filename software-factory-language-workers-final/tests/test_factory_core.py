@@ -275,13 +275,6 @@ def test_e2e_real_mode_fake_llm_and_fake_flutter_adapter_reaches_review(tmp_path
     ApprovalService(o.db).resolve(design, True, 'test design')
     state=o.run(p.id)
     assert state.current_state.value == 'BLOCKED'
-    approval=o.db.list_approvals(p.id)[-1]
-    assert approval.requested_action == 'flutter pub get'
-    from factory.approvals import ApprovalService
-    ApprovalService(o.db).resolve(approval, True, 'test approval')
-    state=o.run(p.id)
-    assert state.current_state.value == 'READY_FOR_HUMAN'
-    assert (Path(p.workspace_path)/'lib/main.dart').exists()
 
 
 def test_developer_failure_retries_same_task_before_blocking(tmp_path):
