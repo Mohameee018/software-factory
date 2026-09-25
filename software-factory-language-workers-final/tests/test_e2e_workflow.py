@@ -23,6 +23,10 @@ class DeterministicE2EProvider(AIProvider):
     def __init__(self): self.review_calls=0
     def generate(self, system, prompt, *, timeout=None): return LLMResponse('', 'e2e')
     def generate_json(self, system, prompt, schema, *, timeout=None):
+        if 'Design professional' in system:
+            return {'design_summary':'Test design.','design_system':'Simple responsive design.','screens':['Home'],'user_flow':'Open to action.','html_preview':'<html><body><h1>Test</h1></body></html>'}
+        if 'Design professional' in system:
+            return {'design_summary':'Clothes Store UI.','design_system':'Responsive retail UI.','screens':['Home','Details','Cart'],'user_flow':'Browse to cart.','html_preview':'<html><body><h1>Clothes Store</h1></body></html>'}
         if 'Planner Agent' in system or 'natural-language request' in system:
             return {'PRD':'# PRD\nBuild a local sample.','MVP':'# MVP\nPassing tests.','ARCHITECTURE':'# Architecture\nSimple Python package.','REQUIREMENTS':'# Requirements\n- Python project','TASKS':'# Tasks\n- Build sample project','ACCEPTANCE_CRITERIA':'# Acceptance\n- Tests pass','RISKS':'# Risks\n- None known'}
         if 'Analyzer Agent' in system:
@@ -46,8 +50,17 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     o=Orchestrator(Database(settings.db_path),settings)
     provider=DeterministicE2EProvider()
     o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider)
+    from factory.agents import UIUXAgent
+    o.agents['uiux']=UIUXAgent(provider)
+    from factory.agents import UIUXAgent
+    o.agents['uiux']=UIUXAgent(provider)
     monkeypatch.setattr(registry, 'ADAPTERS', [LocalPythonAdapter(), *registry.ADAPTERS])
     p=o.create_project('E2E','Build a deterministic Python sample')
+    state=o.run(p.id, mock=False)
+    assert state.current_state == WorkflowState.WAITING_FOR_DESIGN_APPROVAL
+    from factory.approvals import ApprovalService
+    approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
+    ApprovalService(o.db).resolve(approval, True, 'test')
     state=o.run(p.id, mock=False)
     assert state.current_state == WorkflowState.READY_FOR_HUMAN
     tests=o.db.list_events(p.id, 200)
@@ -112,6 +125,11 @@ def test_clothes_store_end_to_end_with_fake_dependencies(tmp_path, monkeypatch):
     p=o.create_project('Clothes Store','Build a Flutter clothing store with Men Women Kids, product details, cart and local mock data.')
     # Simulate Flutter project creation because this test isolates the orchestration contract, not the SDK.
     (Path(p.workspace_path)/'pubspec.yaml').write_text('name: clothes_store\n')
+    state=o.run(p.id)
+    assert state.current_state == WorkflowState.WAITING_FOR_DESIGN_APPROVAL
+    from factory.approvals import ApprovalService
+    approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
+    ApprovalService(o.db).resolve(approval, True, 'test')
     state=o.run(p.id)
     assert state.current_state == WorkflowState.READY_FOR_HUMAN
     for rel in ['lib/main.dart','lib/models/product.dart','lib/data/products.dart','lib/screens/home_screen.dart','lib/screens/product_details_screen.dart','lib/screens/cart_screen.dart','test/widget_test.dart']:
