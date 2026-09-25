@@ -70,15 +70,8 @@ def test_flutter_unavailable_blocks_real_run_with_clear_error(tmp_path, monkeypa
     settings=Settings(tmp_path/'factory.db',tmp_path/'workspaces','INFO','openai','model','dummy',3,10,10,mode='real')
     settings.ensure_directories()
     o=Orchestrator(Database(settings.db_path),settings)
-    from factory.agents import UIUXAgent, UIUXReviewerAgent
-    from factory.providers.mock import MockProvider
-    o.agents['uiux']=UIUXAgent(MockProvider('mock')); o.agents['uiux_reviewer']=UIUXReviewerAgent(MockProvider('mock'))
     p=o.create_project('Clothes Store','Build a Flutter app')
-    from factory.approvals import ApprovalService
-    o.run(p.id, mock=False)
-    approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
-    ApprovalService(o.db).resolve(approval, True, 'test design')
-
+    state=o.db.get_state(p.id); state.current_state=WorkflowState.DESIGN_APPROVED; o.db.save_state(state); p.current_state=WorkflowState.DESIGN_APPROVED; o.db.save_project(p)
     from factory.tools.shell import CommandResult
     def fake_run(role, command, cwd, timeout=120):
         if command == 'flutter --version':
@@ -314,10 +307,7 @@ def test_flutter_requires_dart_and_can_be_retried_after_sdk_install(tmp_path, mo
     settings=Settings(tmp_path/'factory.db',tmp_path/'workspaces','INFO','openai','model','dummy',3,10,10,mode='real')
     settings.ensure_directories(); o=Orchestrator(Database(settings.db_path),settings)
     p=o.create_project('Clothes Store','Build a Flutter app')
-    from factory.approvals import ApprovalService
-    o.run(p.id, mock=False)
-    approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
-    ApprovalService(o.db).resolve(approval, True, 'test design')
+    state=o.db.get_state(p.id); state.current_state=WorkflowState.DESIGN_APPROVED; o.db.save_state(state); p.current_state=WorkflowState.DESIGN_APPROVED; o.db.save_project(p)
     from factory.tools.shell import CommandResult
     calls=[]
     def fake_run(role, command, cwd, timeout=120):
