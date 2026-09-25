@@ -49,7 +49,7 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     settings.ensure_directories()
     o=Orchestrator(Database(settings.db_path),settings)
     provider=DeterministicE2EProvider()
-    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(provider); o.agents['uiux_reviewer']=UIUXReviewerAgent(provider); o.agents['release']=ReleaseAgent()
+    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['uiux_reviewer']=UIUXReviewerAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['release']=ReleaseAgent()
     monkeypatch.setattr(registry, 'ADAPTERS', [LocalPythonAdapter(), *registry.ADAPTERS])
     p=o.create_project('E2E','Build a deterministic Python sample')
     state=o.run(p.id, mock=False)
@@ -86,7 +86,7 @@ class FakeFlutterAdapter(ProjectAdapter):
 
 class ClothesStoreProvider(AIProvider):
     def generate(self, system, prompt, *, timeout=None): return LLMResponse('', 'fake-clothes')
-    def generate_json(self, system, prompt, schema, *, timeout=None):
+    def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
         if 'Design professional' in system:
             return {'design_summary':'Professional clothing-store mobile UI.','design_system':'Clean responsive retail design with consistent spacing and accessible contrast.','screens':['Home','Categories','Product Details','Cart'],'user_flow':'Browse → details → add to cart → checkout.','html_preview':'<!doctype html><html><body><h1>Clothes Store</h1></body></html>'}
         if 'Planner Agent' in system or 'natural-language request' in system:
@@ -123,7 +123,7 @@ def test_clothes_store_end_to_end_with_fake_dependencies(tmp_path, monkeypatch):
     settings=Settings(tmp_path/'factory.db',tmp_path/'workspaces','INFO','openai-compatible','fake','dummy',3,30,20,mode='real')
     settings.ensure_directories(); o=Orchestrator(Database(settings.db_path),settings)
     provider=ClothesStoreProvider()
-    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(provider); o.agents['uiux_reviewer']=UIUXReviewerAgent(provider)
+    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['uiux_reviewer']=UIUXReviewerAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock'))
     monkeypatch.setattr(registry, 'ADAPTERS', [FakeFlutterAdapter(), *registry.ADAPTERS])
     monkeypatch.setattr(o, '_flutter_dependencies_approved', lambda p, state: True)
     monkeypatch.setattr('factory.orchestrator.run_command', lambda role, command, cwd, timeout=120: __import__('factory.tools.shell',fromlist=['CommandResult']).CommandResult(command,0,'ok','',0.01))
