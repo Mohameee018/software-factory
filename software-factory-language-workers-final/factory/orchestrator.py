@@ -420,7 +420,11 @@ class Orchestrator:
                     self.set_state(p,WorkflowState.BLOCKED)
                     return self.db.get_state(pid) or state
                 if latest.status==ApprovalStatus.REJECTED:
-                    return state
+                    feedback = latest.response or 'Final approval was rejected. Human changes are required before release.'
+                    t = self._add_fix_task(p, 'Final human change request', feedback)
+                    self.set_state(p, WorkflowState.CHANGES_REQUESTED)
+                    self.set_state(p, WorkflowState.TASK_CREATION)
+                    return self.db.get_state(pid) or state
                 return state
             if s in (WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.COMPLETED,WorkflowState.CANCELLED,WorkflowState.PAUSED): return state
         self.set_state(p,WorkflowState.BLOCKED); state.error_history.append('MAX_WORKFLOW_ITERATIONS reached'); self.db.save_state(state); return state
