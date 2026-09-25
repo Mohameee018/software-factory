@@ -39,4 +39,4 @@ class TelegramNotifier:
 
     def release_ready(self, project, result):
         data = result.detailed_output if isinstance(result.detailed_output, dict) else {}
-        self._send(f"📦 <b>#RELEASE</b> Release package created\\n\\n{project_status(project)}\\n\\nPackage: <code>{data.get('package','release/')}</code>")
+        self._send(f"📦 <b>#RELEASE</b> Release package created\n\n{project_status(project)}\n\nPackage: <code>{data.get('package','release/')}</code>")
