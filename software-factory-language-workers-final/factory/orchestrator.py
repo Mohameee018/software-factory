@@ -190,16 +190,15 @@ class Orchestrator:
         if st: st.human_feedback.append(feedback); self.db.save_state(st)
         p=self.db.get_project(pid)
         if not p: raise ValueError('Project not found')
+        if p.current_state==WorkflowState.WAITING_FOR_DESIGN_APPROVAL:
+            self.set_state(p,WorkflowState.DESIGNING)
+            f=Path(p.workspace_path)/'docs'/'DESIGN_FEEDBACK.md'; f.parent.mkdir(parents=True,exist_ok=True); f.open('a',encoding='utf-8').write('\n\n'+feedback+'\n')
+            self.db.event(WorkflowEvent(project_id=pid,event_type='DESIGN_FEEDBACK_RECEIVED',details={'feedback':feedback}))
+            return None
         t=self._add_fix_task(p,'Human feedback',feedback)
         self.db.event(WorkflowEvent(project_id=pid,event_type='FEEDBACK_RECEIVED',task_id=t.id,details={'feedback':feedback}))
         if p.current_state==WorkflowState.READY_FOR_HUMAN:
             self.set_state(p,WorkflowState.CHANGES_REQUESTED); self.set_state(p,WorkflowState.TASK_CREATION)
-        elif p.current_state==WorkflowState.WAITING_FOR_DESIGN_APPROVAL:
-            self.set_state(p,WorkflowState.DESIGNING)
-            try:
-                from pathlib import Path
-                f=Path(p.workspace_path)/'docs'/'DESIGN_FEEDBACK.md'; f.parent.mkdir(parents=True,exist_ok=True); f.open('a',encoding='utf-8').write('\n\n'+feedback+'\n')
-            except Exception: pass
         return t
 
     def retry(self,pid):
