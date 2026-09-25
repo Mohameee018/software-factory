@@ -1,10 +1,12 @@
 from __future__ import annotations
 import asyncio
+from pathlib import Path
 from telegram import Update
 from telegram.ext import ContextTypes
-from factory.models import ProjectType, WorkflowState
+from factory.models import ProjectType, WorkflowState, WorkflowEvent
 from factory.approvals import ApprovalService
 from factory.integrations.telegram.formatter import project_status, task_lines
+from factory.roles import extract_target, TAG_TO_ROLE
 
 class TelegramHandlers:
     def __init__(self, service): self.service=service; self.queue=getattr(service,'job_queue',None)
@@ -20,6 +22,32 @@ class TelegramHandlers:
             self._enqueue(p.id); await update.effective_message.reply_text(f'Created <code>{p.id}</code>. 🚀 Execution queued.',parse_mode='HTML'); return
         context.user_data['awaiting_project']=True; await update.effective_message.reply_text('Describe the project you want to build.')
     async def text(self, update, context):
+        raw = update.effective_message.text or ''
+        target, message = extract_target(raw)
+        if target:
+            pid = context.user_data.get('active_project_id') or self.service.db.get_active_project(update.effective_user.id)
+            if not pid or not self.service.db.get_project(pid):
+                await update.effective_message.reply_text('No active project. Use /new first.')
+                return
+            p = self.service.db.get_project(pid)
+            if target == '#ALL':
+                self.service.db.event(WorkflowEvent(project_id=pid,event_type='HUMAN_DIRECTIVE',details={'target':'#ALL','message':message}))
+                await update.effective_message.reply_text('📢 #ALL directive saved to the shared factory context.')
+                self._enqueue(pid,priority=100)
+                return
+            role = TAG_TO_ROLE[target]
+            self.service.db.event(WorkflowEvent(project_id=pid,event_type='HUMAN_DIRECTIVE',details={'target':target,'role':role,'message':message}))
+            f = Path(p.workspace_path) / 'docs' / 'TEAM_CONTEXT.md'
+            f.parent.mkdir(parents=True,exist_ok=True)
+            with f.open('a',encoding='utf-8') as fh:
+                fh.write("\n\n## " + target + " directive\n" + message + "\n")
+            if role == 'uiux' and p.current_state == WorkflowState.WAITING_FOR_DESIGN_APPROVAL:
+                self.service.add_feedback(pid, message)
+            elif role == 'developer':
+                self.service._add_fix_task(p, target + ' direct fix', message)
+            await update.effective_message.reply_text('📨 ' + target + ' استلم الرسالة. هتتنفذ حسب ترتيب الـworkflow، ومش هتتخطى الموظف اللي قبله.')
+            self._enqueue(pid,priority=100)
+            return
         if not context.user_data.pop('awaiting_project',False):
             pid=context.user_data.get('active_project_id')
             if pid and self.service.db.get_project(pid):
@@ -32,9 +60,9 @@ class TelegramHandlers:
                     return
                 t=self.service.add_feedback(pid,update.effective_message.text)
                 if t:
-                    await update.effective_message.reply_text(f'Feedback saved as task <code>{t.id}</code>. Resuming the factory.',parse_mode='HTML')
+                    await update.effective_message.reply_text(f'🧑‍💼 #PM Feedback saved as task <code>{t.id}</code>. Resuming the factory.',parse_mode='HTML')
                 else:
-                    await update.effective_message.reply_text('🎨 التعديل اتسجل. برجع الـUI/UX Agent يعيد التصميم.')
+                    await update.effective_message.reply_text('🎨 #UIUX التعديل اتسجل. برجع الـUI/UX Agent يعيد التصميم.')
                     self._enqueue(pid,priority=100)
                 return
             return
