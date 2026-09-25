@@ -393,9 +393,23 @@ class Orchestrator:
                 continue
             if s==WorkflowState.FIXING: self.set_state(p,WorkflowState.IMPLEMENTATION if self.next_task(p) else WorkflowState.TESTING); continue
             if s==WorkflowState.READY_FOR_HUMAN:
-                if self.notifier:
-                    try:self.notifier.ready_summary(p,self.db.list_tasks(p.id))
-                    except Exception:pass
+                approvals=[a for a in self.db.list_approvals(p.id) if a.requested_action=='final_approval']
+                latest=approvals[-1] if approvals else None
+                if latest is None:
+                    approval=ApprovalService(self.db).request(p.id,'final_approval','Implementation, tests, code review, UI/UX review and security review are complete. Final human approval is required for release.',Severity.MEDIUM)
+                    state.approvals.append(approval.id); self.db.save_state(state)
+                    if self.notifier:
+                        try:self.notifier.approval_requested(approval)
+                        except Exception:pass
+                    if self.notifier:
+                        try:self.notifier.ready_summary(p,self.db.list_tasks(p.id))
+                        except Exception:pass
+                    return state
+                if latest.status==ApprovalStatus.APPROVED:
+                    self.set_state(p,WorkflowState.COMPLETED)
+                    return self.db.get_state(pid) or state
+                if latest.status==ApprovalStatus.REJECTED:
+                    return state
                 return state
             if s in (WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.COMPLETED,WorkflowState.CANCELLED,WorkflowState.PAUSED): return state
         self.set_state(p,WorkflowState.BLOCKED); state.error_history.append('MAX_WORKFLOW_ITERATIONS reached'); self.db.save_state(state); return state
