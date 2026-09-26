@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json, os, threading, time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from factory.models import WorkflowEvent
 
@@ -50,7 +51,9 @@ class FactorySupervisor:
         try: return max(0,min(23,int(os.getenv("FACTORY_AUDIT_HOUR","9"))))
         except Exception: return 9
     def _daily_audit_if_due(self):
-        now=datetime.now(timezone.utc); key=now.date().isoformat()
+        try: tz=ZoneInfo(os.getenv("FACTORY_AUDIT_TIMEZONE","Africa/Cairo"))
+        except Exception: tz=timezone.utc
+        now=datetime.now(tz); key=now.date().isoformat()
         if self._last_audit_date==key or now.hour<self._audit_hour(): return
         self._last_audit_date=key; self.run_audit()
     def _snapshot(self):
