@@ -50,11 +50,23 @@ class FactorySupervisor:
     def _audit_hour(self):
         try: return max(0,min(23,int(os.getenv("FACTORY_AUDIT_HOUR","9"))))
         except Exception: return 9
+    def _audit_already_recorded_today(self, now):
+        try:
+            for event in self.db.list_events(limit=120):
+                if event.event_type != 'FACTORY_DAILY_AUDIT': continue
+                ts = event.timestamp.astimezone(now.tzinfo) if event.timestamp.tzinfo else event.timestamp.replace(tzinfo=timezone.utc).astimezone(now.tzinfo)
+                if ts.date() == now.date(): return True
+        except Exception: return False
+        return False
+
     def _daily_audit_if_due(self):
         try: tz=ZoneInfo(os.getenv("FACTORY_AUDIT_TIMEZONE","Africa/Cairo"))
         except Exception: tz=timezone.utc
         now=datetime.now(tz); key=now.date().isoformat()
         if self._last_audit_date==key or now.hour<self._audit_hour(): return
+        if self._audit_already_recorded_today(now):
+            self._last_audit_date=key
+            return
         self._last_audit_date=key; self.run_audit()
     def _snapshot(self):
         projects=[]
@@ -75,7 +87,12 @@ class FactorySupervisor:
         return {"projects":projects,"queue_pending":self.db.queue_count(),"heartbeats":heartbeats,
                 "recent_events":[{"type":e.event_type,"project_id":e.project_id,"state":e.state,"details":e.details,"timestamp":e.timestamp.isoformat()} for e in events],
                 "learning":learning}
-    def run_audit(self):
+    def run_audit(self, force=False):
+        if not force:
+            try:
+                tz=ZoneInfo(os.getenv('FACTORY_AUDIT_TIMEZONE','Africa/Cairo'))
+                if self._audit_already_recorded_today(datetime.now(tz)): return False
+            except Exception: pass
         snapshot=self._snapshot()
         instructions=("You are the senior operations and intelligence supervisor of an autonomous software factory. "
                        "Audit the factory itself, not a single project. Inspect health, reliability, AI quality, agent skills, "
