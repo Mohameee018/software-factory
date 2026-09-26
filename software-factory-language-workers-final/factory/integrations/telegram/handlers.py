@@ -10,12 +10,14 @@ from factory.roles import extract_target, TAG_TO_ROLE
 from factory.memory import load_user_memory, update_user_memory
 
 class TelegramHandlers:
-    def __init__(self, service): self.service=service; self.queue=getattr(service,'job_queue',None)
+    def __init__(self, service):
+        self.service=service; self.queue=getattr(service,'job_queue',None)
+        self.github=getattr(service,'github',None)
     def _enqueue(self, project_id, task_id=None, priority=50):
         if self.queue: return self.queue.enqueue(project_id,task_id,priority)
         return None
     async def start(self, update:Update, context:ContextTypes.DEFAULT_TYPE): await update.effective_message.reply_text('Software Factory online. Use /help.')
-    async def help(self, update, context): await update.effective_message.reply_text('/new /projects /project <id> /status <id> /tasks <id> /run <id> /pause <id> /resume <id> /cancel <id> /retry <id> /logs <id> /approve <id> /reject <id> /review <id> /feedback <id> <text>')
+    async def help(self, update, context): await update.effective_message.reply_text('/new /projects /project <id> /status <id> /tasks <id> /run <id> /pause <id> /resume <id> /cancel <id> /retry <id> /logs <id> /approve <id> /reject <id> /review <id> /feedback <id> <text> /github-public <id>')
     async def new(self, update, context):
         if context.args:
             description=' '.join(context.args); p=self.service.create_project('Telegram Project',description)
@@ -154,6 +156,22 @@ class TelegramHandlers:
         self.service.db.event(WorkflowEvent(project_id=p.id,event_type='DESIGN_REFERENCE_RECEIVED',details={'path':'docs/design/reference.png'}))
         self._enqueue(p.id,priority=100)
         await update.effective_message.reply_text(f'📷 Reference screenshot saved. Created <code>{p.id}</code> and queued the design phase.',parse_mode='HTML')
+
+    async def github_public(self, update, context):
+        if not context.args:
+            await update.effective_message.reply_text('اكتب /github-public <project_id>.')
+            return
+        pid=context.args[0]
+        p=self.service.db.get_project(pid)
+        if not p:
+            await update.effective_message.reply_text('المشروع مش موجود.')
+            return
+        try:
+            info=self.service.github.make_public(p.workspace_path)
+            self.service.db.event(WorkflowEvent(project_id=pid,event_type='GITHUB_REPOSITORY_PUBLIC',details=info or {}))
+            await update.effective_message.reply_text(f'🌍 الريبو بقى Public.\n{info.get("html_url") or info.get("full_name")}')
+        except Exception as exc:
+            await update.effective_message.reply_text(f'⚠️ مقدرتش أغيّر حالة الريبو: {str(exc)[:1000]}')
 
     async def projects(self, update, context):
         ps=self.service.db.list_projects(); await update.effective_message.reply_text('\n'.join(f'{p.id} [{p.current_state.value}] {p.name}' for p in ps) or 'No projects.')
