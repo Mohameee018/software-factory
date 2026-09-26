@@ -8,7 +8,7 @@ import time
 from factory.models import new_id, now
 
 class JobStatus(str, Enum):
-    PENDING='PENDING'; RUNNING='RUNNING'; WAITING_APPROVAL='WAITING_APPROVAL'; RETRYING='RETRYING'; COMPLETED='COMPLETED'; FAILED='FAILED'; CANCELLED='CANCELLED'
+    PENDING='PENDING'; RUNNING='RUNNING'; WAITING_APPROVAL='WAITING_APPROVAL'; WAITING_QUOTA='WAITING_QUOTA'; RETRYING='RETRYING'; COMPLETED='COMPLETED'; FAILED='FAILED'; CANCELLED='CANCELLED'
 
 @dataclass(frozen=True)
 class Job:
@@ -25,6 +25,7 @@ class PersistentJobQueue:
     def cancel_project(self, project_id): self.db.cancel_pending_jobs(project_id)
     def pending_count(self): return self.db.queue_count()
     def update_waiting(self, job_id): self.db.update_job(job_id, JobStatus.WAITING_APPROVAL.value, worker_state='waiting_approval')
+    def update_waiting_quota(self, job_id, resume_at): self.db.update_job(job_id, JobStatus.WAITING_QUOTA.value, worker_state='waiting_quota', resume_at=resume_at)
 
 class FactoryWorker:
     def __init__(self, orchestrator, queue, poll_interval=2.0, worker_id=None, worker_type='generic'):
@@ -49,7 +50,13 @@ class FactoryWorker:
                     self.queue.fail(job.id, f'Project is {current.current_state.value.lower()}')
                     continue
                 state=self.orchestrator.run(job.project_id, dry_run=False, mock=False)
-                if state.current_state.value == 'BLOCKED' and self.orchestrator.db.has_pending_approval(job.project_id):
+                if state.current_state.value == 'WAITING_FOR_QUOTA':
+                    resume_at=state.quota_resume_at
+                    if resume_at:
+                        self.orchestrator.db.update_job(job.id, JobStatus.WAITING_QUOTA.value, worker_state='waiting_quota', resume_at=resume_at)
+                    else:
+                        self.orchestrator.db.update_job(job.id, JobStatus.WAITING_QUOTA.value, worker_state='waiting_quota')
+                elif state.current_state.value == 'BLOCKED' and self.orchestrator.db.has_pending_approval(job.project_id):
                     self.queue.update_waiting(job.id) if hasattr(self.queue,'update_waiting') else self.orchestrator.db.update_job(job.id, JobStatus.WAITING_APPROVAL.value, worker_state='waiting_approval')
                 elif state.current_state.value in {'FAILED','CANCELLED'}:
                     self.queue.fail(job.id, f'Project ended in {state.current_state.value}')
@@ -70,7 +77,8 @@ class FactoryWorker:
                 self.queue.fail(job.id, f'Project is {current.current_state.value.lower()}')
                 return True
             state=self.orchestrator.run(job.project_id, dry_run=False, mock=False)
-            if state.current_state.value == 'BLOCKED' and self.orchestrator.db.has_pending_approval(job.project_id): self.orchestrator.db.update_job(job.id, JobStatus.WAITING_APPROVAL.value, worker_state='waiting_approval')
+            if state.current_state.value == 'WAITING_FOR_QUOTA': self.orchestrator.db.update_job(job.id, JobStatus.WAITING_QUOTA.value, worker_state='waiting_quota', resume_at=state.quota_resume_at)
+            elif state.current_state.value == 'BLOCKED' and self.orchestrator.db.has_pending_approval(job.project_id): self.orchestrator.db.update_job(job.id, JobStatus.WAITING_APPROVAL.value, worker_state='waiting_approval')
             elif state.current_state.value in {'FAILED','CANCELLED'}: self.queue.fail(job.id, f'Project ended in {state.current_state.value}')
             else: self.queue.complete(job.id)
         except Exception as exc:
