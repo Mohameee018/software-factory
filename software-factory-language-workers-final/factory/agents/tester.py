@@ -1,3 +1,4 @@
+from pathlib import Path
 from factory.agents.base import Agent
 from factory.models import AgentResult
 from factory.adapters.registry import detect
