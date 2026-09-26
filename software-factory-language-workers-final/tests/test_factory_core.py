@@ -8,7 +8,7 @@ from factory.permissions import PermissionDenied, Permission
 from factory.adapters.python import PythonAdapter
 from factory.database import Database
 from factory.orchestrator import Orchestrator
-from factory.agents import RequirementsAgent
+from factory.agents import RequirementsAgent, ManagerAgent, ArchitectAgent, AuditorAgent
 from factory.config import Settings
 from factory.providers.mock import MockProvider
 
@@ -269,7 +269,7 @@ def test_e2e_real_mode_fake_llm_and_fake_flutter_adapter_reaches_review(tmp_path
     monkeypatch.setattr('factory.orchestrator.detect', lambda w: FakeFlutter())
     monkeypatch.setattr('factory.orchestrator.run_command', lambda role, command, cwd, timeout=120: CommandResult(command,0,'Flutter fake OK','',0.01))
     monkeypatch.setattr('factory.agents.tester.execute', lambda role, kind, command, cwd, timeout: CommandResult(command,0,'Flutter fake OK','',0.01))
-    provider=FakeProvider(); o.agents.update(requirements=RequirementsAgent(provider),planner=PlannerAgent(provider),analyzer=AnalyzerAgent(provider),developer=DeveloperAgent(provider),reviewer=ReviewerAgent(provider),uiux=UIUXAgent(MockProvider('mock')),uiux_reviewer=UIUXReviewerAgent(MockProvider('mock')))
+    provider=FakeProvider(); o.agents.update(requirements=RequirementsAgent(provider),manager=ManagerAgent(MockProvider('mock')),architect=ArchitectAgent(MockProvider('mock')),auditor=AuditorAgent(MockProvider('mock')),planner=PlannerAgent(provider),analyzer=AnalyzerAgent(provider),developer=DeveloperAgent(provider),reviewer=ReviewerAgent(provider),uiux=UIUXAgent(MockProvider('mock')),uiux_reviewer=UIUXReviewerAgent(MockProvider('mock')))
     p=o.create_project('Clothes Store','Build a Flutter clothing store app')
     state=o.db.get_state(p.id); state.current_state=WorkflowState.DESIGNING; o.db.save_state(state); p.current_state=WorkflowState.DESIGNING; o.db.save_project(p)
     (Path(p.workspace_path)/'pubspec.yaml').write_text('name: clothes_store\n')
