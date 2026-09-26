@@ -242,3 +242,26 @@ Back up both `/data/factory.db` and `/data/projects`. The deployment documentati
 ## Important verification status
 
 The repository contains the production deployment configuration, but a repository build/configuration is not the same as an external production verification. Real Telegram credentials, a real AI key, and a running Docker/VPS environment are required for final external smoke testing.
+
+
+## Multi-model AI routing
+
+The factory supports role-specific model pools with automatic failover. Each AI worker tries its configured models in order; a failed or exhausted model is skipped and the next model continues the same task. Telegram reports the active model and failover events.
+
+Use comma-separated provider:model values:
+
+AI_MODELS_UIUX=gemini:gemini-3.8-flash,openai:gpt-5.6,anthropic:claude-sonnet
+AI_MODELS_PLANNER=openai:gpt-5.6,gemini:gemini-3.8-flash
+AI_MODELS_ANALYZER=openai:gpt-5.6,gemini:gemini-3.8-flash
+AI_MODELS_DEVELOPER=anthropic:claude-sonnet,openai:gpt-5.6,gemini:gemini-3.8-flash
+AI_MODELS_REVIEWER=openai:gpt-5.6,anthropic:claude-sonnet
+AI_MODELS_UIUX_REVIEWER=gemini:gemini-3.8-flash,openai:gpt-5.6
+
+Provider credentials are read from GEMINI_API_KEY, OPENAI_API_KEY, and ANTHROPIC_API_KEY. The existing AI_API_KEY remains supported for the currently configured provider.
+
+If every candidate reports a daily quota exhaustion, the project enters WAITING_FOR_QUOTA instead of BLOCKED. The job is persisted and automatically becomes runnable at the configured time:
+
+FACTORY_QUOTA_TIMEZONE=Africa/Cairo
+FACTORY_QUOTA_RESUME_AT=09:00
+
+When the time arrives, the worker resumes from the exact previous workflow state and does not restart the project.
