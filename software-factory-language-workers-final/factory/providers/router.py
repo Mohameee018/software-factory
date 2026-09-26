@@ -71,11 +71,11 @@ class ModelRouter:
             else:
                 model=item
                 low=model.lower()
-                if low.startswith('gpt-'): provider='openai'
+                if low.startswith('gpt-5-codex') or low.startswith('gpt-5.1-codex') or low.startswith('gpt-5.2-codex'): provider='codex'
+                elif low.startswith('gpt-oss-') or low.startswith('openai/gpt-oss-'): provider='groq'
+                elif low.startswith('gpt-'): provider='openai'
                 elif low.startswith('gemini-'): provider='gemini'
                 elif low.startswith('claude-'): provider='anthropic'
-                elif low.startswith('gpt-5-codex') or low.startswith('gpt-5.1-codex') or low.startswith('gpt-5.2-codex'): provider='codex'
-                elif low.startswith('gpt-oss-') or low.startswith('openai/gpt-oss-'): provider='groq'
                 else: provider=str(self.settings.provider).strip().lower()
             if provider and model:
                 label=f'{provider}:{model}'
