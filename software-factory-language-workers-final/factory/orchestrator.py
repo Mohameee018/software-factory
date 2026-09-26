@@ -55,7 +55,24 @@ class Orchestrator:
         self.model_router.set_project_context(ctx.project.id)
         if not self._agent_budget_allowed(ctx.project.id, role):
             return AgentResult(success=False, agent_name=role, errors=[f"Agent budget exhausted for role: {role}"], summary="Agent role budget exhausted.")
-        result = self.agents[role].run(ctx)
+        agent = self.agents[role]
+        # Feed durable factory-learning lessons into every AI role. This lets the
+        # supervisor improve prompts/behavior over time without changing project truth.
+        try:
+            learning_path = Path(self.settings.workspaces_root) / '.factory' / 'FACTORY_LEARNING.md'
+            learning = learning_path.read_text(encoding='utf-8', errors='ignore')[-12000:] if learning_path.exists() else ''
+            base_instructions = getattr(agent, 'instructions', '')
+            if learning and not getattr(agent, '_factory_learning_loaded', False):
+                agent.instructions = (
+                    base_instructions
+                    + '\n\nFACTORY LEARNING — durable operational lessons from previous audits. '
+                    + 'Use these as process guidance, never as project requirements:\n'
+                    + learning
+                )
+                agent._factory_learning_loaded = True
+        except Exception:
+            pass
+        result = agent.run(ctx)
         # Requirements can confirm the platform/domain after discovery. Persist it
         # before the workflow advances so later stages never see stale UNKNOWN.
         if role == 'requirements' and result.success:
