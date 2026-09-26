@@ -30,6 +30,8 @@ def verify(stage: WorkflowState, workspace: str, result: AgentResult | None = No
             errors.append("architect_result_not_successful")
 
     elif stage == WorkflowState.IMPLEMENTATION:
+        if not (root / "docs/TRACEABILITY.md").exists():
+            errors.append("missing_traceability_artifact")
         if task is None:
             errors.append("implementation_gate_missing_task")
         elif result is not None:
@@ -67,7 +69,7 @@ def verify(stage: WorkflowState, workspace: str, result: AgentResult | None = No
             errors.append("security_review_not_passed")
 
     elif stage == WorkflowState.READY_FOR_HUMAN:
-        required = ("docs/DESIGN.md","docs/PRD.md","docs/ARCHITECTURE.md","docs/ACCEPTANCE_CRITERIA.md","docs/TEST_REPORT.md","docs/CODE_REVIEW.md","docs/UX_REVIEW.md","docs/SECURITY_REVIEW.md")
+        required = ("docs/DESIGN.md","docs/PRD.md","docs/ARCHITECTURE.md","docs/ACCEPTANCE_CRITERIA.md","docs/TRACEABILITY.md","docs/TEST_REPORT.md","docs/CODE_REVIEW.md","docs/UX_REVIEW.md","docs/SECURITY_REVIEW.md","docs/TEAM.md")
         errors += [f"final_artifact_missing:{p}" for p in _missing(root, required)]
 
     return errors
