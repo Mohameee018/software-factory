@@ -7,11 +7,14 @@ from factory.roles import tag_for
 
 class TelegramNotifier:
     """Synchronous notifier safe to call from the orchestrator worker thread."""
-    def __init__(self, settings): self.settings=settings
+    def __init__(self, settings, db=None): self.settings=settings; self.db=db
     def _send(self, text, reply_markup=None):
         token=self.settings.telegram_bot_token
         if not token:return
         chat_ids=self.settings.telegram_allowed_chat_ids or self.settings.telegram_allowed_user_ids
+        if not chat_ids and self.db:
+            try: chat_ids=self.db.list_telegram_chats()
+            except Exception: chat_ids=[]
         for chat_id in chat_ids:
             body={'chat_id':chat_id,'text':text,'parse_mode':'HTML'}
             if reply_markup is not None: body['reply_markup']=reply_markup.to_dict() if hasattr(reply_markup,'to_dict') else reply_markup
