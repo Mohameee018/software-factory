@@ -13,6 +13,10 @@ class RoleRouter:
     def __init__(self, parent, role):
         self.parent, self.role = parent, role
         self.last_model = None
+
+    @property
+    def is_mock(self):
+        return self.parent.settings.mode in ('mock','dry-run') or all(x['provider']=='mock' for x in self.parent.specs_for(self.role))
         self.last_attempts = []
 
     def _run(self, method, *args, **kwargs):
