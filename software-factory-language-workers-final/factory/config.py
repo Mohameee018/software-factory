@@ -28,9 +28,15 @@ class Settings:
 def load_settings():
     provider=os.getenv('AI_PROVIDER') or os.getenv('FACTORY_LLM_PROVIDER','mock').lower()
     key=os.getenv('AI_API_KEY') or os.getenv('FACTORY_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('ANTHROPIC_API_KEY')
+    model = os.getenv('AI_MODEL') or os.getenv('FACTORY_MODEL','gpt-4o-mini')
+    # Gemini 2.5 Flash has been retired for new users. Keep existing Railway
+    # deployments self-healing by transparently moving the legacy setting to
+    # the current stable Flash model instead of retrying a permanent 404.
+    if model.strip().lower() == 'gemini-2.5-flash':
+        model = 'gemini-3.8-flash'
     return Settings(
       Path(os.getenv('DATABASE_PATH') or os.getenv('FACTORY_DB_PATH','./factory.db')).resolve(), Path(os.getenv('WORKSPACE_PATH') or os.getenv('FACTORY_WORKSPACES_ROOT','./workspaces')).resolve(),
-      os.getenv('FACTORY_LOG_LEVEL','INFO').upper(), provider, os.getenv('AI_MODEL') or os.getenv('FACTORY_MODEL','gpt-4o-mini'), key,
+      os.getenv('FACTORY_LOG_LEVEL','INFO').upper(), provider, model, key,
       int(os.getenv('MAX_RETRIES') or os.getenv('FACTORY_MAX_RETRIES','3')), int(os.getenv('MAX_WORKFLOW_ITERATIONS') or os.getenv('FACTORY_MAX_ITERATIONS','30')), int(os.getenv('COMMAND_TIMEOUT') or os.getenv('FACTORY_COMMAND_TIMEOUT','120')),
       os.getenv('AI_BASE_URL') or os.getenv('FACTORY_API_BASE_URL','https://api.openai.com/v1'), os.getenv('TELEGRAM_BOT_TOKEN'), _csv_int(os.getenv('TELEGRAM_ALLOWED_USER_IDS','')),
       _csv_int(os.getenv('TELEGRAM_ALLOWED_CHAT_IDS','')), _env_bool(os.getenv('TELEGRAM_ENABLED','false')),
