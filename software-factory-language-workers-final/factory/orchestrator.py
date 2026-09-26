@@ -8,7 +8,7 @@ import re
 from factory.models import *
 from factory.state import transition
 from factory.database import Database
-from factory.agents import RequirementsAgent, PlannerAgent, AnalyzerAgent, ArchitectAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent, UIUXReviewerAgent
+from factory.agents import RequirementsAgent, ManagerAgent, PlannerAgent, AnalyzerAgent, ArchitectAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent, UIUXReviewerAgent
 from factory.approvals import ApprovalService
 from factory.adapters.registry import detect, by_name
 from factory.project_detection import detect_project_type
@@ -32,7 +32,7 @@ class Orchestrator:
         provider = build_provider(settings)
         self.model_router = ModelRouter(settings, notifier)
         self.agents = {
-            'requirements': RequirementsAgent(self.model_router.for_role('requirements')), 'planner': PlannerAgent(self.model_router.for_role('planner')), 'analyzer': AnalyzerAgent(self.model_router.for_role('analyzer')), 'architect': ArchitectAgent(self.model_router.for_role('architect')),
+            'requirements': RequirementsAgent(self.model_router.for_role('requirements')), 'manager': ManagerAgent(self.model_router.for_role('manager')), 'planner': PlannerAgent(self.model_router.for_role('planner')), 'analyzer': AnalyzerAgent(self.model_router.for_role('analyzer')), 'architect': ArchitectAgent(self.model_router.for_role('architect')),
             'developer': DeveloperAgent(self.model_router.for_role('developer')), 'tester': TesterAgent(),
             'reviewer': ReviewerAgent(self.model_router.for_role('reviewer')), 'uiux_reviewer': UIUXReviewerAgent(self.model_router.for_role('uiux_reviewer')), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(self.model_router.for_role('uiux'))
         }
@@ -479,7 +479,21 @@ class Orchestrator:
                 else:
                     errs=gate_errors or r.errors or ['Architecture gate failed.']; state.gate_failures.extend(errs); state.error_history.extend(errs); self.db.save_state(state); self.set_state(p,WorkflowState.BLOCKED)
                 continue
-            if s==WorkflowState.TASK_CREATION: self.ensure_tasks(p); self.set_state(p,WorkflowState.IMPLEMENTATION); continue
+            if s==WorkflowState.TASK_CREATION:
+                self.ensure_tasks(p)
+                self.notifier.agent_started(p, 'Manager Agent', 'بيتحقق إن كل requirement متغطية وبيوزع المهام والـskills تلقائيًا') if self.notifier else None
+                mr=self.agents['manager'].run(ctx); self.record(state,mr)
+                if self._pause_for_quota(p,mr,state): continue
+                if mr.success:
+                    self.set_state(p,WorkflowState.IMPLEMENTATION)
+                else:
+                    errs=mr.errors[-8:] or ['Manager rejected the task plan.']
+                    state.error_history.extend(errs); state.gate_failures.extend(errs); self.db.save_state(state)
+                    if self.notifier:
+                        try:self.notifier._send('🛑 <b>#MANAGER</b> رفض خطة التنفيذ وطلب إعادة التخطيط:\n'+'\n'.join('• '+x for x in errs))
+                        except Exception:pass
+                    self.set_state(p,WorkflowState.PLANNING)
+                continue
             if s==WorkflowState.IMPLEMENTATION:
                 t=self.next_task(p)
                 if not t: self.set_state(p,WorkflowState.TESTING); continue
@@ -639,7 +653,7 @@ class Orchestrator:
         self.set_state(p,WorkflowState.BLOCKED); state.error_history.append('MAX_WORKFLOW_ITERATIONS reached'); self.db.save_state(state); return state
 
     def record(self,state,r):
-        role_map={'Planner Agent':'planner','Analyzer Agent':'analyzer','Architect Agent':'architect','Developer Agent':'developer','Code Reviewer':'reviewer','UI/UX Reviewer':'uiux_reviewer','UI/UX Designer Agent':'uiux'}
+        role_map={'Requirements Specialist':'requirements','Manager Agent':'manager','Planner Agent':'planner','Analyzer Agent':'analyzer','Architect Agent':'architect','Developer Agent':'developer','Code Reviewer':'reviewer','UI/UX Reviewer':'uiux_reviewer','UI/UX Designer Agent':'uiux'}
         role=role_map.get(r.agent_name)
         router=getattr(getattr(self,'agents',{}).get(role),'provider',None) if role else None
         if router and getattr(router,'last_model',None):
