@@ -21,9 +21,10 @@ class TelegramHandlers:
         """Detect and persist a concrete project type at intake, before workflow work starts."""
         try:
             detected = detect_project_type(description or "", getattr(project, "workspace_path", None))
-            if detected == ProjectType.UNKNOWN:
+            if detected != ProjectType.UNKNOWN:
+                project.project_type = detected
+            if getattr(project, "project_type", ProjectType.UNKNOWN) == ProjectType.UNKNOWN:
                 return
-            project.project_type = detected
             db = getattr(self.service, "db", None)
             if db is not None:
                 db.save_project(project)
@@ -165,6 +166,7 @@ class TelegramHandlers:
             r=self.service.agents['requirements'].run(type('Ctx',(),{'project':p,'workspace':p.workspace_path,'timeout':self.service.settings.ai_timeout})())
         except Exception as e:
             await update.effective_message.reply_text(f'حصل خطأ وأنا بجمع المتطلبات: {e}'); return
+        self._ensure_project_type(p, user_message)
         if r.next_action=='ask_client':
             await update.effective_message.reply_text('💬 '+r.summary); return
         if r.success:
