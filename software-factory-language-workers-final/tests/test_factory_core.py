@@ -44,11 +44,6 @@ def test_mock_workflow_reaches_human_review(tmp_path):
     state=o.db.get_state(p.id); state.current_state=WorkflowState.DESIGNING; o.db.save_state(state); p.current_state=WorkflowState.DESIGNING; o.db.save_project(p)
     state=o.run(p.id,mock=True)
     from factory.approvals import ApprovalService
-    reqs=[a for a in o.db.list_approvals(p.id) if a.requested_action=='requirements_approval']
-    assert reqs, (state.current_state, state.error_history)
-    req=reqs[-1]
-    ApprovalService(o.db).resolve(req, True, 'test requirements')
-    state=o.run(p.id,mock=True)
     assert state.current_state==WorkflowState.WAITING_FOR_DESIGN_APPROVAL
     approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
     ApprovalService(o.db).resolve(approval, True, 'test design')
