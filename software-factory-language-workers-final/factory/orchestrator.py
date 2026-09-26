@@ -8,7 +8,7 @@ import re
 from factory.models import *
 from factory.state import transition
 from factory.database import Database
-from factory.agents import PlannerAgent, AnalyzerAgent, ArchitectAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent, UIUXReviewerAgent
+from factory.agents import RequirementsAgent, PlannerAgent, AnalyzerAgent, ArchitectAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent, UIUXReviewerAgent
 from factory.approvals import ApprovalService
 from factory.adapters.registry import detect, by_name
 from factory.project_detection import detect_project_type
@@ -32,7 +32,7 @@ class Orchestrator:
         provider = build_provider(settings)
         self.model_router = ModelRouter(settings, notifier)
         self.agents = {
-            'planner': PlannerAgent(self.model_router.for_role('planner')), 'analyzer': AnalyzerAgent(self.model_router.for_role('analyzer')), 'architect': ArchitectAgent(self.model_router.for_role('architect')),
+            'requirements': RequirementsAgent(self.model_router.for_role('requirements')), 'planner': PlannerAgent(self.model_router.for_role('planner')), 'analyzer': AnalyzerAgent(self.model_router.for_role('analyzer')), 'architect': ArchitectAgent(self.model_router.for_role('architect')),
             'developer': DeveloperAgent(self.model_router.for_role('developer')), 'tester': TesterAgent(),
             'reviewer': ReviewerAgent(self.model_router.for_role('reviewer')), 'uiux_reviewer': UIUXReviewerAgent(self.model_router.for_role('uiux_reviewer')), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(self.model_router.for_role('uiux'))
         }
@@ -322,7 +322,28 @@ class Orchestrator:
                     except Exception:pass
             state.iteration_count+=1; self.db.save_state(state); s=p.current_state
             if s==WorkflowState.IDEA:
-                self.set_state(p,WorkflowState.DESIGNING); continue
+                self.set_state(p,WorkflowState.REQUIREMENTS_GATHERING); continue
+            if s==WorkflowState.REQUIREMENTS_GATHERING:
+                self.notifier.agent_started(p, 'Requirements Specialist', 'بيجمع المتطلبات معاك بشكل حواري وبيسأل حسب السياق') if self.notifier else None
+                r=self.agents['requirements'].run(ctx); self.record(state,r)
+                if self._pause_for_quota(p,r,state): continue
+                if r.success and r.next_action=='ask_client':
+                    if self.notifier:
+                        try:self.notifier._send(f'💬 <b>#REQUIREMENTS</b> {r.summary}')
+                        except Exception:pass
+                    return state
+                if r.success:
+                    approval=ApprovalService(self.db).request(p.id,'requirements_approval','PRD, requirements and acceptance criteria are ready. Review and approve them before the Manager starts planning.',Severity.MEDIUM,files=['docs/PRD.md','docs/REQUIREMENTS.md','docs/ACCEPTANCE_CRITERIA.md'])
+                    state.approvals.append(approval.id); state.stage_evidence[WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL.value]=list(r.completion_evidence); self.db.save_state(state)
+                    if self.notifier:
+                        try:self.notifier._send(f'📋 <b>#REQUIREMENTS</b> {r.summary}\nراجع الملفات، ولو تمام اكتب <b>تمام</b>.')
+                        except Exception:pass
+                    self.set_state(p,WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL)
+                else:
+                    state.error_history.extend(r.errors[-3:]); self.db.save_state(state); self.set_state(p,WorkflowState.BLOCKED)
+                continue
+            if s==WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL:
+                return state
             if s==WorkflowState.DESIGNING:
                 self.notifier.agent_started(p, 'UI/UX Designer Agent', 'بدأ تحديد الشاشات والـ user flow والـ design system') if self.notifier else None
                 r=self.agents['uiux'].run(ctx); self.record(state,r)
