@@ -26,6 +26,7 @@ from factory.github import GitHubProjectPublisher
 from factory.gitflow import GitFlow
 from factory.budget import BudgetManager
 from factory.artifacts import record_artifacts
+from factory.employee_os import role_for_task, sync_task_file
 
 @dataclass
 class Context:
@@ -175,7 +176,17 @@ class Orchestrator:
             except Exception: pass
 
     def ensure_tasks(self, p):
-        if self.db.list_tasks(p.id): return
+        existing = self.db.list_tasks(p.id)
+        if existing:
+            # Keep the filesystem employee inbox synchronized with durable DB truth.
+            for task in existing:
+                try:
+                    task.assigned_agent = role_for_task(task.title, task.assigned_agent)
+                    self.db.save_task(task)
+                    sync_task_file(p.workspace_path, task)
+                except Exception:
+                    pass
+            return
         path = Path(p.workspace_path) / 'docs' / 'TASKS.md'
         candidates=[]
         if path.exists():
@@ -212,8 +223,9 @@ class Orchestrator:
             for dep_num in meta.get('dependencies',[]):
                 if 1 <= dep_num <= len(created): dep_ids.append(created[dep_num-1].id)
             if not dep_ids and not meta.get('dependencies_explicit') and i > 1: dep_ids=[created[-1].id]
-            t=Task(project_id=p.id,title=title,description=title,priority=Priority.HIGH,assigned_agent='developer',dependencies=dep_ids,acceptance_criteria=meta.get('acceptance_criteria',[]),files_expected=meta.get('files_expected',[]),tests_required=meta.get('tests_required',[]))
-            self.db.save_task(t); self.db.event(WorkflowEvent(project_id=p.id,event_type='TASK_CREATED',task_id=t.id,details={'dependencies':dep_ids,'acceptance_criteria':t.acceptance_criteria,'files_expected':t.files_expected,'tests_required':t.tests_required})); created.append(t)
+            t=Task(project_id=p.id,title=title,description=title,priority=Priority.HIGH,assigned_agent=role_for_task(title, 'developer'),dependencies=dep_ids,acceptance_criteria=meta.get('acceptance_criteria',[]),files_expected=meta.get('files_expected',[]),tests_required=meta.get('tests_required',[]))
+            self.db.save_task(t)
+            sync_task_file(p.workspace_path, t); self.db.event(WorkflowEvent(project_id=p.id,event_type='TASK_CREATED',task_id=t.id,details={'dependencies':dep_ids,'acceptance_criteria':t.acceptance_criteria,'files_expected':t.files_expected,'tests_required':t.tests_required})); created.append(t)
 
     def next_task(self,p):
         tasks=self.db.list_tasks(p.id); done={t.id for t in tasks if t.status==TaskStatus.DONE}
@@ -222,8 +234,9 @@ class Orchestrator:
         return None
 
     def _add_fix_task(self,p,title,description,priority=Priority.HIGH):
-        t=Task(project_id=p.id,title=title,description=description,priority=priority,assigned_agent='developer')
-        self.db.save_task(t); self.db.event(WorkflowEvent(project_id=p.id,event_type='FIX_TASK_CREATED',task_id=t.id)); return t
+        t=Task(project_id=p.id,title=title,description=description,priority=priority,assigned_agent=role_for_task(title, 'developer'))
+        self.db.save_task(t)
+        sync_task_file(p.workspace_path, t); self.db.event(WorkflowEvent(project_id=p.id,event_type='FIX_TASK_CREATED',task_id=t.id)); return t
 
     def _get_review_fix_task(self,p,description):
         candidates=[t for t in self.db.list_tasks(p.id) if t.title=='Fix code review findings']
@@ -623,6 +636,7 @@ class Orchestrator:
                                 t.assigned_agent=str(a.get('role') or t.assigned_agent or 'developer').lower()
                                 t.skills=list(a.get('skills') or [])
                                 self.db.save_task(t)
+                                sync_task_file(p.workspace_path, t)
                                 self.db.event(WorkflowEvent(project_id=p.id,event_type='TASK_ASSIGNED',task_id=t.id,details={'role':t.assigned_agent,'skills':t.skills}))
                         except Exception:
                             pass
@@ -638,7 +652,7 @@ class Orchestrator:
             if s==WorkflowState.IMPLEMENTATION:
                 t=self.next_task(p)
                 if not t: self.set_state(p,WorkflowState.TESTING); continue
-                t.status=TaskStatus.IN_PROGRESS; t.updated_at=datetime.now(timezone.utc); t.failure_reason=self._feedback_for_task(p,t); self.db.save_task(t)
+                t.status=TaskStatus.IN_PROGRESS; t.updated_at=datetime.now(timezone.utc); t.failure_reason=self._feedback_for_task(p,t); self.db.save_task(t); sync_task_file(p.workspace_path, t)
                 if effective_mock:
                     r=AgentResult(success=True,agent_name='Developer Agent',task_id=t.id,summary='Mock implementation.',next_action='test')
                 else:
@@ -656,6 +670,10 @@ class Orchestrator:
                     t.retry_count+=1; t.status=TaskStatus.PENDING if t.retry_count < self.settings.max_retries else TaskStatus.FAILED; t.failure_reason='\n'.join(r.errors)
                     state.error_history.extend(r.errors[-5:])
                 self.db.save_task(t)
+                try:
+                    sync_task_file(p.workspace_path, t, evidence=list(r.completion_evidence or r.tests_run or []))
+                except Exception:
+                    pass
                 if r.success:
                     # Re-evaluate the persisted task queue before choosing the next
                     # workflow phase.  A successful implementation must never leave
