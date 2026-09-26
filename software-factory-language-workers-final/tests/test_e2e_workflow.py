@@ -58,6 +58,7 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     o.agents['requirements']=RequirementsAgent(provider); o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['uiux_reviewer']=UIUXReviewerAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['release']=ReleaseAgent()
     monkeypatch.setattr(registry, 'ADAPTERS', [LocalPythonAdapter(), *registry.ADAPTERS])
     p=o.create_project('E2E','Build a deterministic Python sample')
+    state=o.db.get_state(p.id); state.current_state=WorkflowState.DESIGNING; o.db.save_state(state); p.current_state=WorkflowState.DESIGNING; o.db.save_project(p)
     state=o.run(p.id, mock=False)
     from factory.approvals import ApprovalService
     reqs=[a for a in o.db.list_approvals(p.id) if a.requested_action=='requirements_approval']
