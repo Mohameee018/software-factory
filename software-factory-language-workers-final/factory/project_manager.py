@@ -125,6 +125,16 @@ class ProjectManager:
             WorkflowState.READY_FOR_HUMAN: 7, WorkflowState.COMPLETED: 11, WorkflowState.BLOCKED: 0, WorkflowState.FAILED: 0,
         }
         current = order.get(s, 0)
+        if s == WorkflowState.WAITING_FOR_QUOTA:
+            # Quota waiting must preserve the actual workflow stage instead of
+            # looking like the project jumped back to intake.
+            paused_from = None
+            try:
+                st = self.service.db.get_state(project.id)
+                paused_from = st.paused_from if st else None
+            except Exception:
+                paused_from = None
+            current = order.get(paused_from, current)
         lines = ["<b>🗺️ خريطة الطريق لحد ما البرنامج يبقى جاهز</b>"]
         for idx, name, states in stages:
             n = int(idx) - 1
@@ -138,7 +148,9 @@ class ProjectManager:
                 mark = "⬜"
             suffix = " ← <b>أنت هنا</b>" if mark == "🔵" else ""
             lines.append(f"{mark} {idx}. {name}{suffix}")
-        if s == WorkflowState.BLOCKED:
+        if s == WorkflowState.WAITING_FOR_QUOTA:
+            lines.append("⏸️ <b>الحالة:</b> المصنع واقف مؤقتًا بسبب حصة الـAI، وسيكمل تلقائيًا من نفس المرحلة عند عودة الحصة.")
+        elif s == WorkflowState.BLOCKED:
             lines.append("⚠️ <b>فيه عائق:</b> المدير هيحدد المشكلة والخطوة المطلوبة بدل ما يكمل بشكل أعمى.")
         elif s == WorkflowState.FAILED:
             lines.append("❌ <b>فيه فشل:</b> سيتم تسجيل السبب وإعادة المحاولة/الإصلاح حسب الـworkflow.")
