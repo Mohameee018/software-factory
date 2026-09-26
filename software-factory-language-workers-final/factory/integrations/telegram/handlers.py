@@ -91,7 +91,7 @@ class TelegramHandlers:
                 f'❌ AI SMOKE FAIL\\nAttempts: <code>{", ".join(attempts) or "none"}</code>\\nSkipped: <code>{", ".join(skipped) or "none"}</code>\\nError: <code>{str(exc)[:700]}</code>\\nTrace: <code>{" | ".join(tb)[:1200]}</code>',
                 parse_mode='HTML',
             )
-    async def help(self, update, context): await update.effective_message.reply_text('/new /projects /project <id> /status <id> /manager /requirements /tasks <id> /run <id> /pause <id> /resume <id> /cancel <id> /retry <id> /logs <id> /approve <id> /reject <id> /review <id> /feedback <id> <text> /github-public <id>')
+    async def help(self, update, context): await update.effective_message.reply_text('/new /projects /project <id> /status <id> /manager /audit /requirements /tasks <id> /run <id> /pause <id> /resume <id> /cancel <id> /retry <id> /logs <id> /approve <id> /reject <id> /review <id> /feedback <id> <text> /github-public <id>')
     async def new(self, update, context):
         if context.args:
             description=' '.join(context.args); p=self.service.create_project('Telegram Project',description); self._ensure_project_type(p,description)
