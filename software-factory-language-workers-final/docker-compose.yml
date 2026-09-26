@@ -14,6 +14,21 @@ services:
     logging:
       options: {max-size: "10m", max-file: "3"}
 
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    command: ["factory", "dashboard", "--host", "0.0.0.0", "--port", "8080"]
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - factory_data:/data
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+
   worker-python:
     build:
       context: .
