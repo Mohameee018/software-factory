@@ -59,16 +59,30 @@ class Database:
    row=self.get_project(project_id); worker_type = row.project_type.value if row else 'generic'
   with self.conn() as c:c.execute("INSERT INTO jobs(id,project_id,task_id,status,priority,created_at,started_at,completed_at,retry_count,last_error,worker_state,worker_id,lease_until,worker_type) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(jid,project_id,task_id,'PENDING',priority,ts,None,None,0,None,None,None,None,worker_type))
   return jid
+ def reclaim_expired_jobs(self):
+  with self.conn() as c:
+   ts=now().isoformat()
+   c.execute("UPDATE jobs SET status='RETRYING',worker_state='lease_expired',worker_id=NULL,lease_until=NULL,last_error=? WHERE status='RUNNING' AND lease_until IS NOT NULL AND lease_until<=?",("Worker lease expired; job returned to queue.",ts))
+   return c.rowcount
+
+ def extend_job_lease(self,job_id,worker_id,minutes=30):
+  lease=(datetime.now(timezone.utc)+timedelta(minutes=minutes)).isoformat()
+  with self.conn() as c:
+   r=c.execute("UPDATE jobs SET lease_until=?,worker_state='running' WHERE id=? AND status='RUNNING' AND worker_id=?",(lease,job_id,worker_id))
+   return r.rowcount==1
+
  def claim_job(self,worker_id,worker_type='generic'):
   with self.conn() as c:
    c.execute('BEGIN IMMEDIATE')
+   self.reclaim_expired_jobs()
+
    # Only one active worker may advance a project at a time. This keeps
    # Telegram retries, queue workers and future horizontal workers from
    # mutating the same project concurrently.
    if worker_type == 'generic':
-    row=c.execute("SELECT j.id FROM jobs j WHERE (j.status IN ('PENDING','RETRYING') OR (j.status='WAITING_QUOTA' AND j.resume_at IS NOT NULL AND julianday(j.resume_at)<=julianday(?))) AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.project_id=j.project_id AND r.status='RUNNING') ORDER BY j.priority DESC,j.created_at LIMIT 1",(now().isoformat(),)).fetchone()
+    row=c.execute("SELECT j.id FROM jobs j WHERE (j.status IN ('PENDING','RETRYING') OR (j.status='WAITING_QUOTA' AND j.resume_at IS NOT NULL AND julianday(j.resume_at)<=julianday(?))) AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.project_id=j.project_id AND r.status='RUNNING') ORDER BY (j.priority + CAST((julianday(?) - julianday(j.created_at))*10 AS INTEGER)) DESC,j.created_at LIMIT 1",(now().isoformat(),now().isoformat())).fetchone()
    else:
-    row=c.execute("SELECT j.id FROM jobs j WHERE (j.status IN ('PENDING','RETRYING') OR (j.status='WAITING_QUOTA' AND j.resume_at IS NOT NULL AND j.resume_at<=?)) AND j.worker_type=? AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.project_id=j.project_id AND r.status='RUNNING') ORDER BY j.priority DESC,j.created_at LIMIT 1",(now().isoformat(),worker_type)).fetchone()
+    row=c.execute("SELECT j.id FROM jobs j WHERE (j.status IN ('PENDING','RETRYING') OR (j.status='WAITING_QUOTA' AND j.resume_at IS NOT NULL AND j.resume_at<=?)) AND j.worker_type=? AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.project_id=j.project_id AND r.status='RUNNING') ORDER BY j.priority DESC,j.created_at LIMIT 1",(now().isoformat(),worker_type,now().isoformat())).fetchone()
    if not row:return None
    jid=row[0]; ts=now().isoformat(); lease=(datetime.now(timezone.utc)+timedelta(minutes=30)).isoformat()
    c.execute("UPDATE jobs SET status='RUNNING',started_at=COALESCE(started_at,?),worker_id=?,lease_until=?,worker_state='running',resume_at=NULL WHERE id=? AND (status IN ('PENDING','RETRYING') OR status='WAITING_QUOTA')",(ts,worker_id,lease,jid))
