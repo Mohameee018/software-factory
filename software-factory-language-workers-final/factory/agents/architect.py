@@ -7,9 +7,9 @@ from factory.tools.safety import redact_secrets
 SCHEMA={
     "type":"object",
     "properties":{
-        "architecture":"string","components":"string","data_model":"string",
-        "api_contracts":"string","file_structure":"string","technical_decisions":"string",
-        "acceptance_mapping":"string","summary":"string"
+        "architecture":{"type":"string"},"components":{"type":"string"},"data_model":{"type":"string"},
+        "api_contracts":{"type":"string"},"file_structure":{"type":"string"},"technical_decisions":{"type":"string"},
+        "acceptance_mapping":{"type":"string"},"summary":{"type":"string"}
     },
     "required":["architecture","components","data_model","api_contracts","file_structure","technical_decisions","acceptance_mapping","summary"]
 }
