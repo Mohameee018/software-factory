@@ -26,7 +26,7 @@ class TelegramHandlers:
         project = self.service.db.get_project(pid) if pid else None
         if project and isinstance(text, str):
             text = text.rstrip() + "\n\n" + self.manager.progress_map(project)
-        return await self._reply(update, text, **kwargs)
+        return await update.effective_message.reply_text(text, **kwargs)
 
     def _set_state(self, project, state):
         setter = getattr(self.service, 'set_state', None)
