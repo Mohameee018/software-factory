@@ -58,6 +58,9 @@ class TelegramNotifier:
         path=Path(project.workspace_path) / relative_path
         if not path.is_file(): return
         chat_ids=self.settings.telegram_allowed_chat_ids or self.settings.telegram_allowed_user_ids
+        if not chat_ids and self.db:
+            try: chat_ids=self.db.list_telegram_chats()
+            except Exception: chat_ids=[]
         for chat_id in chat_ids:
             try:
                 boundary='factorytelegram'
