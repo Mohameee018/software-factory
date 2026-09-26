@@ -8,11 +8,14 @@ from factory.approvals import ApprovalService
 from factory.integrations.telegram.formatter import project_status, task_lines
 from factory.roles import extract_target, TAG_TO_ROLE
 from factory.memory import load_user_memory, update_user_memory
+from factory.project_manager import ProjectManager
 
 class TelegramHandlers:
     def __init__(self, service):
         self.service=service; self.queue=getattr(service,'job_queue',None)
         self.github=getattr(service,'github',None)
+        self.notifier=getattr(service,'notifier',None)
+        self.manager=ProjectManager(service)
     def _set_state(self, project, state):
         setter = getattr(self.service, 'set_state', None)
         if setter:
@@ -26,7 +29,7 @@ class TelegramHandlers:
         if self.queue: return self.queue.enqueue(project_id,task_id,priority)
         return None
     async def start(self, update:Update, context:ContextTypes.DEFAULT_TYPE): await update.effective_message.reply_text('Software Factory online. Use /help.')
-    async def help(self, update, context): await update.effective_message.reply_text('/new /projects /project <id> /status <id> /tasks <id> /run <id> /pause <id> /resume <id> /cancel <id> /retry <id> /logs <id> /approve <id> /reject <id> /review <id> /feedback <id> <text> /github-public <id>')
+    async def help(self, update, context): await update.effective_message.reply_text('/new /projects /project <id> /status <id> /manager /requirements /tasks <id> /run <id> /pause <id> /resume <id> /cancel <id> /retry <id> /logs <id> /approve <id> /reject <id> /review <id> /feedback <id> <text> /github-public <id>')
     async def new(self, update, context):
         if context.args:
             description=' '.join(context.args); p=self.service.create_project('Telegram Project',description)
@@ -72,6 +75,19 @@ class TelegramHandlers:
             if p.current_state==WorkflowState.REQUIREMENTS_GATHERING:
                 await self._requirements_turn(update,context,p,raw); return
             msg=raw.casefold()
+            # Client-facing Project Manager resolves natural-language status/artifact requests
+            # before generic feedback handling.
+            routed=self.manager.route(getattr(update.effective_user,'id',None),raw,p)
+            if routed.get('intent')=='artifact':
+                await self._send_requested_artifacts(update,context,p,routed.get('artifact',''))
+                return
+            if routed.get('intent')=='status':
+                await update.effective_message.reply_text(self.manager.status_message(p),parse_mode='HTML')
+                return
+            if routed.get('intent')=='continue':
+                self._enqueue(p.id,priority=100)
+                await update.effective_message.reply_text('👔 <b>#MANAGER</b> تمام. رجعت الـworkflow للطابور وهتابع الموظفين من هنا.',parse_mode='HTML')
+                return
             if p.current_state in (WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL,WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.READY_FOR_HUMAN) and msg in {'تمام','تم','موافق','approve','approved','ok','okay'}:
                 action={WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL:'requirements_approval',WorkflowState.WAITING_FOR_DESIGN_APPROVAL:'design_approval',WorkflowState.READY_FOR_HUMAN:'final_approval'}[p.current_state]
                 approvals=[a for a in self.service.db.list_approvals(p.id) if a.requested_action==action and a.status.value=='PENDING']
@@ -124,7 +140,12 @@ class TelegramHandlers:
             approval=ApprovalService(self.service.db).request(p.id,'requirements_approval','Requirements package is ready for client approval.',Severity.MEDIUM,files=['docs/PRD.md','docs/REQUIREMENTS.md','docs/ACCEPTANCE_CRITERIA.md'])
             st=self.service.db.get_state(p.id); st.approvals.append(approval.id); self.service.db.save_state(st)
             self.service.set_state(p,WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL)
-            await update.effective_message.reply_text('📋 جهزت الـPRD والـRequirements والـAcceptance Criteria.\nراجعهم، ولو تمام اكتب «تمام». ولو محتاج تعديل قولي عادي.')
+            await update.effective_message.reply_text('📋 جهزت الـPRD والـRequirements والـAcceptance Criteria.\nهيوصلكوا كملفات دلوقتي. راجعهم، ولو تمام اكتب «تمام». ولو محتاج تعديل قولي عادي.')
+            if self.notifier:
+                try:
+                    self.notifier.send_requirements_package(p)
+                except Exception:
+                    pass
         else:
             await update.effective_message.reply_text('⚠️ '+(r.summary or 'محتاج أعيد محاولة جمع المتطلبات.'))
 
@@ -166,6 +187,37 @@ class TelegramHandlers:
         self.service.db.event(WorkflowEvent(project_id=p.id,event_type='DESIGN_REFERENCE_RECEIVED',details={'path':'docs/design/reference.png'}))
         self._enqueue(p.id,priority=100)
         await update.effective_message.reply_text(f'📷 Reference screenshot saved. Created <code>{p.id}</code> and queued the design phase.',parse_mode='HTML')
+
+    async def _send_requested_artifacts(self, update, context, p, requested=''):
+        requested=(requested or '').casefold()
+        files=[]
+        if p.current_state == WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL or any(x in requested for x in ('prd','requirements','acceptance')):
+            files=['docs/PRD.md','docs/REQUIREMENTS.md','docs/ACCEPTANCE_CRITERIA.md']
+        elif p.current_state == WorkflowState.WAITING_FOR_DESIGN_APPROVAL or any(x in requested for x in ('preview','design','الصورة','التصميم')):
+            files=['docs/design/preview.png','docs/design/preview.jpg','docs/design/preview.jpeg','docs/design/preview.html']
+        sent=False
+        for rel in files:
+            path=Path(p.workspace_path)/rel
+            if not path.is_file():
+                continue
+            sent=True
+            if path.suffix.lower() in {'.png','.jpg','.jpeg','.webp'} and self.notifier:
+                self.notifier.send_photo(p,rel)
+            elif self.notifier:
+                self.notifier.send_document(p,rel)
+        if not sent:
+            await update.effective_message.reply_text('👔 <b>#MANAGER</b> لقيت إن الـartifact المطلوب مش موجود كملف قابل للإرسال حاليًا. هسجل ده كحالة محتاجة متابعة بدل ما أفترض إنه اتبعت.',parse_mode='HTML')
+            self.service.db.event(WorkflowEvent(project_id=p.id,event_type='ARTIFACT_DELIVERY_MISSING',details={'requested':requested,'state':p.current_state.value}))
+        else:
+            await update.effective_message.reply_text('👔 <b>#MANAGER</b> أيوه، لقيت الـartifact وبعتهولك فوق. مش هاعتبر إنك طلبت تعديل لمجرد إنك سألت عنه.',parse_mode='HTML')
+
+    async def manager(self, update, context):
+        p=await self._require_project(update,context)
+        if p: await update.effective_message.reply_text(self.manager.status_message(p),parse_mode='HTML')
+
+    async def requirements(self, update, context):
+        p=await self._require_project(update,context)
+        if p: await self._send_requested_artifacts(update,context,p,'requirements')
 
     async def github_public(self, update, context):
         if not context.args:
@@ -240,7 +292,7 @@ class TelegramHandlers:
         if not a or a.status.value!='PENDING': await q.edit_message_text('Approval is no longer pending.'); return
         approved = action == 'a'
         ApprovalService(self.service.db).resolve(a,approved,f'Telegram user {update.effective_user.id}')
-        await q.edit_message_text('APPROVED' if approved else 'REJECTED')
+        await q.edit_message_text(('✅ APPROVED\\n👔 #MANAGER: الموافقة اتسجلت، وهتابع انتقال المشروع للمرحلة التالية.' if approved else '❌ REJECTED\\n👔 #MANAGER: الرفض اتسجل، وهارجع المرحلة للمراجعة والتعديل.'))
         p = self.service.db.get_project(a.project_id)
         if p and a.requested_action == 'requirements_approval':
             if approved:
