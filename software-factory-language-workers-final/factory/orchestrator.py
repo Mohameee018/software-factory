@@ -639,7 +639,10 @@ class Orchestrator:
                 continue
             if s==WorkflowState.REVIEWING:
                 if effective_mock:
-                    r=AgentResult(success=True,agent_name='Code Reviewer',summary='Mock review.',next_action='security')
+                    review_report=Path(p.workspace_path)/'docs'/'CODE_REVIEW.md'
+                    review_report.parent.mkdir(parents=True,exist_ok=True)
+                    review_report.write_text('# Code Review Report\\n\\nMock code review passed.\\n',encoding='utf-8')
+                    r=AgentResult(success=True,agent_name='Code Reviewer',summary='Mock review.',next_action='security',files_created=['docs/CODE_REVIEW.md'],completion_evidence=['docs/CODE_REVIEW.md'])
                 else:
                     self.notifier.agent_started(p, 'Code Reviewer', 'بدأ مراجعة الكود والجودة والمخاطر') if self.notifier else None
                     r=self.agents['reviewer'].run(ctx)
@@ -661,7 +664,10 @@ class Orchestrator:
                 continue
             if s==WorkflowState.UX_REVIEW:
                 if effective_mock:
-                    r=AgentResult(success=True,agent_name='UI/UX Reviewer',summary='Mock UI/UX review passed.',next_action='security')
+                    ux_report=Path(p.workspace_path)/'docs'/'UX_REVIEW.md'
+                    ux_report.parent.mkdir(parents=True,exist_ok=True)
+                    ux_report.write_text('# UI/UX Review Report\\n\\nMock UI/UX review passed.\\n',encoding='utf-8')
+                    r=AgentResult(success=True,agent_name='UI/UX Reviewer',summary='Mock UI/UX review passed.',next_action='security',files_created=['docs/UX_REVIEW.md'],completion_evidence=['docs/UX_REVIEW.md'])
                 else:
                     self.notifier.agent_started(p, 'UI/UX Reviewer', 'بدأ مقارنة التنفيذ بالتصميم المعتمد') if self.notifier else None
                     r=self.agents['uiux_reviewer'].run(ctx)
