@@ -691,7 +691,10 @@ class Orchestrator:
                 continue
             if s==WorkflowState.SECURITY_REVIEW:
                 if effective_mock:
-                    r=AgentResult(success=True,agent_name='Security Reviewer',summary='Mock security review.',next_action='ready')
+                    security_report=Path(p.workspace_path)/'docs'/'SECURITY_REVIEW.md'
+                    security_report.parent.mkdir(parents=True,exist_ok=True)
+                    security_report.write_text('# Security Review\\n\\nPASS\\n\\nMock security review passed.\\n',encoding='utf-8')
+                    r=AgentResult(success=True,agent_name='Security Reviewer',summary='Mock security review.',next_action='ready',files_created=['docs/SECURITY_REVIEW.md'],completion_evidence=['docs/SECURITY_REVIEW.md'])
                 else:
                     self.notifier.agent_started(p, 'Security Reviewer', 'بدأ فحص الأمان والثغرات') if self.notifier else None
                     r=self.agents['security'].run(ctx)
