@@ -79,4 +79,4 @@ def select_team(requirements_text: str, project_type: str = "") -> list[str]:
     team=["manager","requirements","planner","architect","developer","tester","reviewer","security","release"]
     if any(x in text for x in ("flutter","mobile","ios","android","web","desktop","ui","design")):
         team.insert(4,"uiux"); team.insert(-3,"uiux_reviewer")
-    return list(dict.fromkeys(team))
+    if any(x in text for x in ("api","backend","service","deployment","docker","cloud")): team.insert(-1,"devops")\n    if any(x in text for x in ("documentation","guide","manual","api docs")): team.insert(-1,"writer")\n    if any(x in text for x in ("complex","large","microservice","architecture","multi-service")): team.insert(4,"techlead")\n    team.append("handoff")\n    return list(dict.fromkeys(team))
