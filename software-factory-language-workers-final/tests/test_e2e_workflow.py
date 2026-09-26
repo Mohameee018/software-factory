@@ -136,7 +136,7 @@ def test_clothes_store_end_to_end_with_fake_dependencies(tmp_path, monkeypatch):
     settings=Settings(tmp_path/'factory.db',tmp_path/'workspaces','INFO','openai-compatible','fake','dummy',3,30,20,mode='real')
     settings.ensure_directories(); o=Orchestrator(Database(settings.db_path),settings)
     provider=ClothesStoreProvider()
-    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['uiux_reviewer']=UIUXReviewerAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock'))
+    o.agents['requirements']=RequirementsAgent(provider); o.agents['manager']=ManagerAgent(provider); o.agents['architect']=ArchitectAgent(provider); o.agents['auditor']=AuditorAgent(provider); o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['uiux_reviewer']=UIUXReviewerAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock'))
     monkeypatch.setattr(registry, 'ADAPTERS', [FakeFlutterAdapter(), *registry.ADAPTERS])
     monkeypatch.setattr(o, '_flutter_dependencies_approved', lambda p, state: True)
     monkeypatch.setattr('factory.orchestrator.run_command', lambda role, command, cwd, timeout=120: __import__('factory.tools.shell',fromlist=['CommandResult']).CommandResult(command,0,'ok','',0.01))
@@ -150,7 +150,7 @@ def test_clothes_store_end_to_end_with_fake_dependencies(tmp_path, monkeypatch):
     approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
     ApprovalService(o.db).resolve(approval, True, 'test')
     state=o.run(p.id)
-    assert state.current_state == WorkflowState.READY_FOR_HUMAN
+    assert state.current_state == WorkflowState.READY_FOR_HUMAN, state.error_history
     final=[a for a in o.db.list_approvals(p.id) if a.requested_action=='final_approval'][-1]
     ApprovalService(o.db).resolve(final, True, 'test final approval')
     state=o.run(p.id)
