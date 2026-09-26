@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS factory_states(project_id TEXT PRIMARY KEY,state_json
 CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,task_id TEXT,status TEXT NOT NULL,priority INTEGER NOT NULL,created_at TEXT NOT NULL,started_at TEXT,completed_at TEXT,retry_count INTEGER NOT NULL DEFAULT 0,last_error TEXT,worker_state TEXT,worker_id TEXT,lease_until TEXT,worker_type TEXT NOT NULL DEFAULT 'generic',resume_at TEXT,FOREIGN KEY(project_id) REFERENCES projects(id));
 CREATE INDEX IF NOT EXISTS idx_jobs_status_priority ON jobs(status,priority,created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_project ON jobs(project_id);
+CREATE INDEX IF NOT EXISTS idx_events_project_time ON workflow_events(project_id,timestamp);
+CREATE INDEX IF NOT EXISTS idx_artifacts_project_path ON artifacts(project_id,path);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_project_time ON agent_runs(project_id,timestamp);
 CREATE TABLE IF NOT EXISTS telegram_sessions(user_id INTEGER PRIMARY KEY,active_project_id TEXT,updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS telegram_chats(chat_id INTEGER PRIMARY KEY,updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS service_heartbeats(service TEXT PRIMARY KEY,updated_at TEXT NOT NULL,details_json TEXT NOT NULL);
@@ -59,10 +62,13 @@ class Database:
  def claim_job(self,worker_id,worker_type='generic'):
   with self.conn() as c:
    c.execute('BEGIN IMMEDIATE')
+   # Only one active worker may advance a project at a time. This keeps
+   # Telegram retries, queue workers and future horizontal workers from
+   # mutating the same project concurrently.
    if worker_type == 'generic':
-    row=c.execute("SELECT id FROM jobs WHERE status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND julianday(resume_at)<=julianday(?)) ORDER BY priority DESC,created_at LIMIT 1",(now().isoformat(),)).fetchone()
+    row=c.execute("SELECT j.id FROM jobs j WHERE (j.status IN ('PENDING','RETRYING') OR (j.status='WAITING_QUOTA' AND j.resume_at IS NOT NULL AND julianday(j.resume_at)<=julianday(?))) AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.project_id=j.project_id AND r.status='RUNNING') ORDER BY j.priority DESC,j.created_at LIMIT 1",(now().isoformat(),)).fetchone()
    else:
-    row=c.execute("SELECT id FROM jobs WHERE (status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND resume_at<=?)) AND worker_type=? ORDER BY priority DESC,created_at LIMIT 1",(now().isoformat(),worker_type)).fetchone()
+    row=c.execute("SELECT j.id FROM jobs j WHERE (j.status IN ('PENDING','RETRYING') OR (j.status='WAITING_QUOTA' AND j.resume_at IS NOT NULL AND j.resume_at<=?)) AND j.worker_type=? AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.project_id=j.project_id AND r.status='RUNNING') ORDER BY j.priority DESC,j.created_at LIMIT 1",(now().isoformat(),worker_type)).fetchone()
    if not row:return None
    jid=row[0]; ts=now().isoformat(); lease=(datetime.now(timezone.utc)+timedelta(minutes=30)).isoformat()
    c.execute("UPDATE jobs SET status='RUNNING',started_at=COALESCE(started_at,?),worker_id=?,lease_until=?,worker_state='running',resume_at=NULL WHERE id=? AND (status IN ('PENDING','RETRYING') OR status='WAITING_QUOTA')",(ts,worker_id,lease,jid))
