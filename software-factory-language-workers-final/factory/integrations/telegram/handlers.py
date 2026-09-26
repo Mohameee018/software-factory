@@ -62,7 +62,8 @@ class TelegramHandlers:
         return None
     async def start(self, update:Update, context:ContextTypes.DEFAULT_TYPE): await update.effective_message.reply_text('Software Factory online. Use /help.')
     async def ai_smoke(self, update, context):
-        """Run a tiny real AI request through the production model router without touching a project."""
+        """Run a real AI request and expose enough diagnostics to verify failover."""
+        import traceback
         try:
             router = self.service.model_router.for_role('planner')
             result = router.generate(
@@ -70,16 +71,24 @@ class TelegramHandlers:
                 'Return the required smoke-test text only.',
                 timeout=min(getattr(self.service.settings, 'ai_timeout', 120), 30),
             )
-            attempts = ', '.join(router.last_attempts) or 'none'
-            model = router.last_model or 'unknown'
+            attempts = list(getattr(router, 'last_attempts', None) or [])
+            model = getattr(router, 'last_model', None) or 'unknown'
             await update.effective_message.reply_text(
-                f'✅ AI SMOKE PASS\\nProvider/model: <code>{model}</code>\\nAttempts: <code>{attempts}</code>\\nResponse: <code>{str(result)[:500]}</code>',
+                f'✅ AI SMOKE PASS\\nProvider/model: <code>{model}</code>\\nAttempts: <code>{", ".join(attempts) or "none"}</code>\\nResponse: <code>{str(result)[:500]}</code>',
                 parse_mode='HTML',
             )
         except Exception as exc:
-            attempts = ', '.join(getattr(getattr(self.service, 'model_router', None).for_role('planner'), 'last_attempts', []) or []) if getattr(self.service, 'model_router', None) else 'unknown'
+            router = getattr(self.service, 'model_router', None)
+            role_router = None
+            try:
+                role_router = router.for_role('planner') if router else None
+            except Exception:
+                pass
+            attempts = list(getattr(role_router, 'last_attempts', None) or [])
+            skipped = list(getattr(role_router, 'last_skipped', None) or [])
+            tb = traceback.format_exc().splitlines()[-6:]
             await update.effective_message.reply_text(
-                f'❌ AI SMOKE FAIL\\nAttempts: <code>{attempts}</code>\\nError: <code>{str(exc)[:1000]}</code>',
+                f'❌ AI SMOKE FAIL\\nAttempts: <code>{", ".join(attempts) or "none"}</code>\\nSkipped: <code>{", ".join(skipped) or "none"}</code>\\nError: <code>{str(exc)[:700]}</code>\\nTrace: <code>{" | ".join(tb)[:1200]}</code>',
                 parse_mode='HTML',
             )
     async def help(self, update, context): await update.effective_message.reply_text('/new /projects /project <id> /status <id> /manager /requirements /tasks <id> /run <id> /pause <id> /resume <id> /cancel <id> /retry <id> /logs <id> /approve <id> /reject <id> /review <id> /feedback <id> <text> /github-public <id>')
