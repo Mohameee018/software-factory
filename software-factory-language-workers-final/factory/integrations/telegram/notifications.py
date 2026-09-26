@@ -33,7 +33,32 @@ class TelegramNotifier:
         self._send(approval_text(approval),{'inline_keyboard':[[{'text':'✅ APPROVE','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT','callback_data':f'apr:r:{approval.id}'}]]})
     def design_ready(self, project, approval, result):
         data=result.detailed_output if isinstance(result.detailed_output,dict) else {}
-        self._send(f"🎨 <b>UI/UX DESIGN READY</b>\n\n{project_status(project)}\n\n<b>Summary:</b> {data.get('design_summary','')}\n<b>Screens:</b> {', '.join(data.get('screens',[]))}\n\nPreview: <code>docs/design/preview.html</code>\n\nاضغط APPROVE أو اكتب «تمام». ", {'inline_keyboard':[[{'text':'✅ APPROVE DESIGN','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT DESIGN','callback_data':f'apr:r:{approval.id}'}]]})
+        self._send(f"🎨 <b>UI/UX DESIGN READY</b>\n\n{project_status(project)}\n\n<b>Summary:</b> {data.get('design_summary','')}\n<b>Screens:</b> {', '.join(data.get('screens',[]))}\n\nPreview: <code>docs/design/preview.html</code>\n\nهتوصلك صورة الـ UI/UX دلوقتي.\n\nاضغط APPROVE أو اكتب «تمام». ", {'inline_keyboard':[[{'text':'✅ APPROVE DESIGN','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT DESIGN','callback_data':f'apr:r:{approval.id}'}]]})
+        preview = data.get('design_preview_image')
+        if preview:
+            self._send_photo(project, preview)
+
+    def _send_photo(self, project, relative_path):
+        token=self.settings.telegram_bot_token
+        if not token: return
+        path=Path(project.workspace_path) / str(relative_path)
+        if not path.is_file(): return
+        chat_ids=self.settings.telegram_allowed_chat_ids or self.settings.telegram_allowed_user_ids
+        if not chat_ids and self.db:
+            try: chat_ids=self.db.list_telegram_chats()
+            except Exception: chat_ids=[]
+        for chat_id in chat_ids:
+            try:
+                boundary='factorytelegramphoto'
+                data=path.read_bytes()
+                body=(f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'
+                      f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="{path.name}"\r\n'
+                      'Content-Type: image/png\r\n\r\n').encode()+data+f'\r\n--{boundary}--\r\n'.encode()
+                req=urllib.request.Request(f'https://api.telegram.org/bot{token}/sendPhoto',data=body,
+                    headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
+                urllib.request.urlopen(req,timeout=60).read()
+            except Exception:
+                pass
 
     def agent_result(self, project, result):
         tag = tag_for(getattr(result, 'agent_name', ''))
