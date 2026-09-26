@@ -330,14 +330,13 @@ class Orchestrator:
                 if r.success:
                     gate_errors=verify(WorkflowState.WAITING_FOR_DESIGN_APPROVAL,p.workspace_path,r)
                     if gate_errors:
-                        r.success=False; r.errors.extend(gate_errors); self.record(state,r)
+                        r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors); self.db.save_state(state)
                     else:
                         approval=ApprovalService(self.db).request(p.id,'design_approval','UI/UX design is ready. Approve the design before implementation.',Severity.MEDIUM,files=['docs/DESIGN.md','docs/design/preview.html'])
-                    state.approvals.append(approval.id); self.db.save_state(state)
-                    if self.notifier:
-                        try:self.notifier.design_ready(p,approval,r)
-                        except Exception:pass
-                        state.stage_evidence[WorkflowState.WAITING_FOR_DESIGN_APPROVAL.value]=list(r.files_created); self.db.save_state(state)
+                        state.approvals.append(approval.id); state.stage_evidence[WorkflowState.WAITING_FOR_DESIGN_APPROVAL.value]=list(r.files_created); self.db.save_state(state)
+                        if self.notifier:
+                            try:self.notifier.design_ready(p,approval,r)
+                            except Exception:pass
                         self.set_state(p,WorkflowState.WAITING_FOR_DESIGN_APPROVAL)
                 else:
                     # Provider outages/throttling are transient. The HTTP provider
@@ -519,6 +518,9 @@ class Orchestrator:
                     self.notifier.agent_started(p, 'Code Reviewer', 'بدأ مراجعة الكود والجودة والمخاطر') if self.notifier else None
                     r=self.agents['reviewer'].run(ctx)
                 self.record(state,r)
+                gate_errors=verify(WorkflowState.REVIEWING,p.workspace_path,r)
+                if gate_errors:
+                    r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors); self.db.save_state(state)
                 if r.detailed_output and isinstance(r.detailed_output,dict):
                     for raw in r.detailed_output.get('findings',[]):
                         try:
@@ -538,6 +540,9 @@ class Orchestrator:
                     self.notifier.agent_started(p, 'UI/UX Reviewer', 'بدأ مقارنة التنفيذ بالتصميم المعتمد') if self.notifier else None
                     r=self.agents['uiux_reviewer'].run(ctx)
                 self.record(state,r)
+                gate_errors=verify(WorkflowState.UX_REVIEW,p.workspace_path,r)
+                if gate_errors:
+                    r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors); self.db.save_state(state)
                 if r.detailed_output and isinstance(r.detailed_output,dict):
                     for raw in r.detailed_output.get('findings',[]):
                         try:
@@ -559,6 +564,9 @@ class Orchestrator:
                     self.notifier.agent_started(p, 'Security Reviewer', 'بدأ فحص الأمان والثغرات') if self.notifier else None
                     r=self.agents['security'].run(ctx)
                 self.record(state,r)
+                gate_errors=verify(WorkflowState.SECURITY_REVIEW,p.workspace_path,r)
+                if gate_errors:
+                    r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors); self.db.save_state(state)
                 if r.success: self.set_state(p,WorkflowState.READY_FOR_HUMAN)
                 else:
                     approval=ApprovalService(self.db).request(p.id,'Resolve security finding before continuing','Security reviewer reported a blocking security condition.',Severity.CRITICAL,files=r.errors)
