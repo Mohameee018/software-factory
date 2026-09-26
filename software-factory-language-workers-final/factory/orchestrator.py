@@ -300,6 +300,11 @@ class Orchestrator:
         if not p: raise ValueError('Project not found')
         state=self.db.get_state(pid) or FactoryState(project_id=p.id,project_name=p.name,project_type=p.project_type,current_state=p.current_state,workspace_path=p.workspace_path)
         ctx=Context(p,p.workspace_path,self.settings.command_timeout)
+        if not self.budget.check_or_event(pid):
+            state.error_history.append('Project AI agent-run budget exhausted.')
+            self.db.save_state(state)
+            self.set_state(p, WorkflowState.WAITING_FOR_QUOTA)
+            return state
         effective_mock = mock or dry_run or self.settings.mode in ('mock','dry-run') or (self.settings.mode == 'auto' and self.settings.provider == 'mock')
         # Recover tasks left IN_PROGRESS by a process/Telegram interruption.
         # Re-running an unfinished task is safer than silently skipping it.
