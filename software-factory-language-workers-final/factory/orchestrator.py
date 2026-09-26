@@ -294,15 +294,22 @@ class Orchestrator:
                         except Exception:pass
                     self.set_state(p,WorkflowState.WAITING_FOR_DESIGN_APPROVAL)
                 else:
-                    # A transient provider/JSON failure should not permanently block
-                    # a new project. Keep the design gate retryable and preserve the
-                    # real error so the next attempt has context.
-                    state.error_history.extend(r.errors[-3:] or ['UI/UX design failed.'])
+                    # Permanent provider configuration errors (notably 4xx/404)
+                    # must not cause a 30-iteration Telegram spam loop.
+                    errors = r.errors[-3:] or ['UI/UX design failed.']
+                    state.error_history.extend(errors)
                     self.db.save_state(state)
-                    if self.notifier:
-                        try: self.notifier._send('⚠️ <b>#UIUX</b> التصميم فشل مؤقتًا، هعيد المحاولة تلقائيًا مع الاحتفاظ بسبب الخطأ.')
-                        except Exception: pass
-                    self.set_state(p,WorkflowState.DESIGNING)
+                    permanent = any(('AI provider HTTP 4' in e or 'NOT_FOUND' in e or 'no longer available' in e) for e in errors)
+                    if permanent:
+                        if self.notifier:
+                            try: self.notifier._send('⛔ <b>#UIUX</b> التصميم متوقف بسبب إعداد AI غير صالح. أصلحت الـmodel تلقائيًا في النسخة الجديدة؛ بعد الـdeploy أعد تشغيل المشروع مرة واحدة.')
+                            except Exception: pass
+                        self.set_state(p,WorkflowState.BLOCKED)
+                    else:
+                        if self.notifier:
+                            try: self.notifier._send('⚠️ <b>#UIUX</b> فشل مؤقت، هحاول مرة واحدة فقط بدل تكرار الرسائل بلا نهاية.')
+                            except Exception: pass
+                        self.set_state(p,WorkflowState.BLOCKED)
                 continue
             if s==WorkflowState.WAITING_FOR_DESIGN_APPROVAL:
                 approvals=[a for a in self.db.list_approvals(p.id) if a.requested_action=='design_approval']; latest=approvals[-1] if approvals else None
