@@ -98,6 +98,56 @@ class ProjectManager:
         except Exception:
             return {"intent": "feedback", "artifact": "", "summary": "سأتعامل مع الرسالة كملاحظة للمشروع."}
 
+    def progress_map(self, project) -> str:
+        """Render a client-facing roadmap from requirements to a usable release."""
+        s = project.current_state
+        stages = [
+            ("1", "فهم الفكرة والمتطلبات", {WorkflowState.IDEA, WorkflowState.REQUIREMENTS_GATHERING, WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL}),
+            ("2", "اعتماد الـPRD والـAcceptance Criteria", {WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL}),
+            ("3", "UI/UX والتصميم", {WorkflowState.DESIGNING, WorkflowState.WAITING_FOR_DESIGN_APPROVAL, WorkflowState.DESIGN_APPROVED}),
+            ("4", "التخطيط والمعمارية وتجهيز المهام", {WorkflowState.PLANNING, WorkflowState.DOCUMENTATION, WorkflowState.ANALYSIS, WorkflowState.ARCHITECTURE, WorkflowState.TASK_CREATION}),
+            ("5", "البرمجة وتنفيذ الـMVP", {WorkflowState.IMPLEMENTATION}),
+            ("6", "الاختبارات وإصلاح المشاكل", {WorkflowState.TESTING, WorkflowState.FIXING}),
+            ("7", "Code Review + UX Review + Security", {WorkflowState.REVIEWING, WorkflowState.UX_REVIEW, WorkflowState.SECURITY_REVIEW}),
+            ("8", "Final Gate وتجهيز النسخة النهائية", {WorkflowState.READY_FOR_HUMAN}),
+            ("9", "رفع المشروع على GitHub كـPrivate Repo", set()),
+            ("10", "بناء Release قابل للاستخدام (APK/AAB أو الهدف المناسب)", set()),
+            ("11", "النشر/التشغيل والتحقق النهائي", set()),
+            ("12", "🎉 التسليم — البرنامج جاهز للاستخدام", {WorkflowState.COMPLETED}),
+        ]
+        order = {
+            WorkflowState.IDEA: 0, WorkflowState.REQUIREMENTS_GATHERING: 0, WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL: 1,
+            WorkflowState.DESIGNING: 2, WorkflowState.WAITING_FOR_DESIGN_APPROVAL: 2, WorkflowState.DESIGN_APPROVED: 2,
+            WorkflowState.PLANNING: 3, WorkflowState.DOCUMENTATION: 3, WorkflowState.ANALYSIS: 3, WorkflowState.ARCHITECTURE: 3, WorkflowState.TASK_CREATION: 3,
+            WorkflowState.IMPLEMENTATION: 4, WorkflowState.TESTING: 5, WorkflowState.FIXING: 5,
+            WorkflowState.REVIEWING: 6, WorkflowState.UX_REVIEW: 6, WorkflowState.SECURITY_REVIEW: 6,
+            WorkflowState.READY_FOR_HUMAN: 7, WorkflowState.COMPLETED: 11, WorkflowState.BLOCKED: 0, WorkflowState.FAILED: 0,
+        }
+        current = order.get(s, 0)
+        lines = ["<b>🗺️ خريطة الطريق لحد ما البرنامج يبقى جاهز</b>"]
+        for idx, name, states in stages:
+            n = int(idx) - 1
+            if s == WorkflowState.COMPLETED:
+                mark = "✅"
+            elif n < current:
+                mark = "✅"
+            elif n == current:
+                mark = "🔵"
+            else:
+                mark = "⬜"
+            suffix = " ← <b>أنت هنا</b>" if mark == "🔵" else ""
+            lines.append(f"{mark} {idx}. {name}{suffix}")
+        if s == WorkflowState.BLOCKED:
+            lines.append("⚠️ <b>فيه عائق:</b> المدير هيحدد المشكلة والخطوة المطلوبة بدل ما يكمل بشكل أعمى.")
+        elif s == WorkflowState.FAILED:
+            lines.append("❌ <b>فيه فشل:</b> سيتم تسجيل السبب وإعادة المحاولة/الإصلاح حسب الـworkflow.")
+        elif s == WorkflowState.COMPLETED:
+            lines.append("\n📊 <b>التقدم:</b> 12/12 — مكتمل 🎉")
+        else:
+            lines.append(f"\n📊 <b>التقدم:</b> {current + 1}/12 مراحل رئيسية")
+            lines.append(f"📌 <b>المتبقي:</b> {max(0, 11-current)} مراحل رئيسية، والعدد ممكن يزيد لو ظهرت إصلاحات أو موافقات.")
+        return "\n".join(lines)
+
     def status_message(self, project) -> str:
         state = self.service.db.get_state(project.id)
         events = self.service.db.list_events(project.id, 20)
@@ -128,4 +178,6 @@ class ProjectManager:
             lines.append("⚠️ <b>الحالة:</b> فيه عائق محتاج متابعة.")
         elif project.current_state == WorkflowState.COMPLETED:
             lines.append("✅ <b>الحالة:</b> المشروع مكتمل.")
+        lines.append("")
+        lines.append(self.progress_map(project))
         return "\n".join(lines)
