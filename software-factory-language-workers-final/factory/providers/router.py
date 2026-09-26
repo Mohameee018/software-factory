@@ -126,15 +126,13 @@ class ModelRouter:
             for item in raw.split(','): add_item(item)
         if not specs:
             specs=[self._default_spec()]
-            # If no role-specific pool was configured, build a safe automatic
-            # failover pool from credentials already present in the deployment.
-            # Never introduce a paid provider unless its API key is already set.
+            # Keep independent Gemini-compatible buckets available, then add
+            # cross-provider backups when their credentials are configured.
             base_url=str(self.settings.api_base_url).lower()
             current_provider=str(self.settings.provider).strip().lower()
             if current_provider == 'openai-compatible' and 'generativelanguage.googleapis.com' in base_url:
-                # Gemini Flash models use the same OpenAI-compatible endpoint and
-                # key, while different model buckets can have independent limits.
                 for model_name in (
+                    'gemini-3.8-flash',
                     'gemini-3.7-flash',
                     'gemini-3.6-flash',
                     'gemini-3.5-flash',
@@ -142,11 +140,19 @@ class ModelRouter:
                     'gemini-3.1-flash-lite',
                 ):
                     add_item(f'openai-compatible:{model_name}')
-            # Do not auto-select unrelated providers merely because a key exists.
-            # A stale/unused provider key in Railway must not hijack the workflow.
-            # Cross-provider failover is opt-in through AI_MODELS / AI_MODELS_<ROLE>.
-            # For a Gemini deployment, keep the automatic pool inside Gemini.
-        # Cross-provider failover: when another provider credential is already present,\n        # add a real backup agent automatically. Explicit AI_MODELS still has priority.\n        # The fallback model can be overridden without changing code.\n        global_raw=os.getenv('AI_MODELS','').strip()\n        if not global_raw:\n            if os.getenv('GROQ_API_KEY'):\n                add_item(f"groq:{os.getenv('AI_FAILOVER_GROQ_MODEL','openai/gpt-oss-20b')}")\n            if os.getenv('OPENAI_API_KEY') and current_provider not in ('openai','openai-compatible'):\n                add_item(f"openai:{os.getenv('AI_FAILOVER_OPENAI_MODEL','gpt-5.6')}")\n            if os.getenv('ANTHROPIC_API_KEY') and current_provider != 'anthropic':\n                add_item(f"anthropic:{os.getenv('AI_FAILOVER_ANTHROPIC_MODEL','claude-3-5-haiku-latest')}")\n        else:\n            for item in global_raw.split(','): add_item(item)\n        return specs
+        # Automatic cross-provider failover is enabled whenever the corresponding
+        # credential is present. Explicit role/global AI_MODELS remains authoritative.
+        global_raw=os.getenv('AI_MODELS','').strip()
+        if not global_raw:
+            if os.getenv('GROQ_API_KEY'):
+                add_item(f"groq:{os.getenv('AI_FAILOVER_GROQ_MODEL','openai/gpt-oss-20b')}")
+            if os.getenv('OPENAI_API_KEY') and current_provider != 'openai':
+                add_item(f"openai:{os.getenv('AI_FAILOVER_OPENAI_MODEL','gpt-5.6')}")
+            if os.getenv('ANTHROPIC_API_KEY') and current_provider != 'anthropic':
+                add_item(f"anthropic:{os.getenv('AI_FAILOVER_ANTHROPIC_MODEL','claude-3-5-haiku-latest')}")
+        else:
+            for item in global_raw.split(','): add_item(item)
+        return specs
 
     def provider_for(self, spec):
         key=(spec['provider'],spec['model'])
