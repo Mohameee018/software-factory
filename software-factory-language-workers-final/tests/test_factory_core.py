@@ -48,7 +48,7 @@ def test_mock_workflow_reaches_human_review(tmp_path):
     approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
     ApprovalService(o.db).resolve(approval, True, 'test design')
     state=o.run(p.id,mock=True)
-    assert state.current_state==WorkflowState.READY_FOR_HUMAN
+    assert state.current_state==WorkflowState.READY_FOR_HUMAN, state.error_history
     assert all(t.status==TaskStatus.DONE for t in o.db.list_tasks(p.id))
 
 def test_approval_persistence(tmp_path):
@@ -272,10 +272,6 @@ def test_e2e_real_mode_fake_llm_and_fake_flutter_adapter_reaches_review(tmp_path
     p=o.create_project('Clothes Store','Build a Flutter clothing store app')
     state=o.db.get_state(p.id); state.current_state=WorkflowState.DESIGNING; o.db.save_state(state); p.current_state=WorkflowState.DESIGNING; o.db.save_project(p)
     (Path(p.workspace_path)/'pubspec.yaml').write_text('name: clothes_store\n')
-    state=o.run(p.id)
-    from factory.approvals import ApprovalService
-    req=[a for a in o.db.list_approvals(p.id) if a.requested_action=='requirements_approval'][-1]
-    ApprovalService(o.db).resolve(req, True, 'test requirements')
     state=o.run(p.id)
     assert state.current_state.value == 'WAITING_FOR_DESIGN_APPROVAL'
     design=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
