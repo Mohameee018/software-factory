@@ -4,7 +4,7 @@ from factory.database import Database
 from factory.orchestrator import Orchestrator
 from factory.models import WorkflowState
 from factory.providers.base import LLMResponse, AIProvider
-from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent, UIUXAgent, UIUXReviewerAgent, UIUXAgent, UIUXReviewerAgent, ReleaseAgent
+from factory.agents import RequirementsAgent, PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent, UIUXAgent, UIUXReviewerAgent, ReleaseAgent
 from factory.adapters import registry
 from factory.adapters.base import ProjectAdapter
 
@@ -51,7 +51,7 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     settings.ensure_directories()
     o=Orchestrator(Database(settings.db_path),settings)
     provider=DeterministicE2EProvider()
-    o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['uiux_reviewer']=UIUXReviewerAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['release']=ReleaseAgent()
+    o.agents['requirements']=RequirementsAgent(provider); o.agents['planner']=PlannerAgent(provider); o.agents['analyzer']=AnalyzerAgent(provider); o.agents['developer']=DeveloperAgent(provider); o.agents['reviewer']=ReviewerAgent(provider); o.agents['uiux']=UIUXAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['uiux_reviewer']=UIUXReviewerAgent(__import__('factory.providers.mock',fromlist=['MockProvider']).MockProvider('mock')); o.agents['release']=ReleaseAgent()
     monkeypatch.setattr(registry, 'ADAPTERS', [LocalPythonAdapter(), *registry.ADAPTERS])
     p=o.create_project('E2E','Build a deterministic Python sample')
     state=o.run(p.id, mock=False)
@@ -126,7 +126,7 @@ class ClothesStoreProvider(AIProvider):
 
 def test_clothes_store_end_to_end_with_fake_dependencies(tmp_path, monkeypatch):
     from factory.adapters import registry
-    from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent, UIUXAgent, UIUXReviewerAgent
+    from factory.agents import RequirementsAgent, PlannerAgent, AnalyzerAgent, DeveloperAgent, ReviewerAgent, UIUXAgent, UIUXReviewerAgent
     settings=Settings(tmp_path/'factory.db',tmp_path/'workspaces','INFO','openai-compatible','fake','dummy',3,30,20,mode='real')
     settings.ensure_directories(); o=Orchestrator(Database(settings.db_path),settings)
     provider=ClothesStoreProvider()
