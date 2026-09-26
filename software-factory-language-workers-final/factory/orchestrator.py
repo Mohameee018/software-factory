@@ -268,8 +268,21 @@ class Orchestrator:
                     except Exception:pass
                 return state
             elif p.project_type == ProjectType.UNKNOWN:
-                # UNKNOWN is valid at intake; retry should return the project to the
-                # normal design gate instead of treating missing stack metadata as a failure.
+                # Backfill legacy projects created before intake detection was persisted.
+                # Never let an old UNKNOWN value survive a retry when the client description
+                # clearly identifies the stack (for example, Flutter).
+                try:
+                    detected = detect_project_type(p.description, p.workspace_path)
+                    if detected != ProjectType.UNKNOWN:
+                        p.project_type = detected
+                        p.updated_at = datetime.now(timezone.utc)
+                        self.db.save_project(p)
+                        state = self.db.get_state(pid)
+                        if state:
+                            state.project_type = detected
+                            self.db.save_state(state)
+                except Exception:
+                    pass
                 self.set_state(p, WorkflowState.IDEA)
             elif any('SDK is unavailable' in e or 'workspace is not empty' in e for e in (self.db.get_state(pid).error_history if self.db.get_state(pid) else [])):
                 self.set_state(p, WorkflowState.IDEA)
