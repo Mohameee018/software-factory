@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS workflow_events(id TEXT PRIMARY KEY,project_id TEXT,e
 CREATE TABLE IF NOT EXISTS artifacts(id INTEGER PRIMARY KEY AUTOINCREMENT,project_id TEXT,path TEXT,kind TEXT,created_at TEXT,data_json TEXT);
 CREATE TABLE IF NOT EXISTS human_feedback(id TEXT PRIMARY KEY,project_id TEXT,feedback TEXT,created_at TEXT,data_json TEXT);
 CREATE TABLE IF NOT EXISTS factory_states(project_id TEXT PRIMARY KEY,state_json TEXT NOT NULL,updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,task_id TEXT,status TEXT NOT NULL,priority INTEGER NOT NULL,created_at TEXT NOT NULL,started_at TEXT,completed_at TEXT,retry_count INTEGER NOT NULL DEFAULT 0,last_error TEXT,worker_state TEXT,worker_id TEXT,lease_until TEXT,worker_type TEXT NOT NULL DEFAULT 'generic',FOREIGN KEY(project_id) REFERENCES projects(id));
+CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,task_id TEXT,status TEXT NOT NULL,priority INTEGER NOT NULL,created_at TEXT NOT NULL,started_at TEXT,completed_at TEXT,retry_count INTEGER NOT NULL DEFAULT 0,last_error TEXT,worker_state TEXT,worker_id TEXT,lease_until TEXT,worker_type TEXT NOT NULL DEFAULT 'generic',resume_at TEXT,FOREIGN KEY(project_id) REFERENCES projects(id));
 CREATE INDEX IF NOT EXISTS idx_jobs_status_priority ON jobs(status,priority,created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_project ON jobs(project_id);
 CREATE TABLE IF NOT EXISTS telegram_sessions(user_id INTEGER PRIMARY KEY,active_project_id TEXT,updated_at TEXT NOT NULL);
@@ -36,6 +36,7 @@ class Database:
    c.executescript(SCHEMA)
    cols={r[1] for r in c.execute('PRAGMA table_info(jobs)')}
    if 'worker_type' not in cols: c.execute("ALTER TABLE jobs ADD COLUMN worker_type TEXT NOT NULL DEFAULT 'generic'")
+   if 'resume_at' not in cols: c.execute("ALTER TABLE jobs ADD COLUMN resume_at TEXT")
  def heartbeat(self, service, details=None):
   with self.conn() as c:c.execute("INSERT INTO service_heartbeats VALUES(?,?,?) ON CONFLICT(service) DO UPDATE SET updated_at=excluded.updated_at,details_json=excluded.details_json",(service,now().isoformat(),json.dumps(details or {})))
  def get_heartbeat(self, service):
@@ -59,17 +60,17 @@ class Database:
   with self.conn() as c:
    c.execute('BEGIN IMMEDIATE')
    if worker_type == 'generic':
-    row=c.execute("SELECT id FROM jobs WHERE status IN ('PENDING','RETRYING') ORDER BY priority DESC,created_at LIMIT 1").fetchone()
+    row=c.execute("SELECT id FROM jobs WHERE status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND resume_at<=?) ORDER BY priority DESC,created_at LIMIT 1").fetchone()
    else:
-    row=c.execute("SELECT id FROM jobs WHERE status IN ('PENDING','RETRYING') AND worker_type=? ORDER BY priority DESC,created_at LIMIT 1",(worker_type,)).fetchone()
+    row=c.execute("SELECT id FROM jobs WHERE (status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND resume_at<=?)) AND worker_type=? ORDER BY priority DESC,created_at LIMIT 1",(worker_type,)).fetchone()
    if not row:return None
    jid=row[0]; ts=now().isoformat(); lease=(datetime.now(timezone.utc)+timedelta(minutes=30)).isoformat()
-   c.execute("UPDATE jobs SET status='RUNNING',started_at=COALESCE(started_at,?),worker_id=?,lease_until=?,worker_state='running' WHERE id=? AND status IN ('PENDING','RETRYING')",(ts,worker_id,lease,jid))
+   c.execute("UPDATE jobs SET status='RUNNING',started_at=COALESCE(started_at,?),worker_id=?,lease_until=?,worker_state='running',resume_at=NULL WHERE id=? AND (status IN ('PENDING','RETRYING') OR status='WAITING_QUOTA')",(ts,worker_id,lease,jid))
    r=c.execute("SELECT id,project_id,task_id,status,priority,created_at,started_at,completed_at,retry_count,last_error,worker_state,worker_type FROM jobs WHERE id=?",(jid,)).fetchone()
   from factory.queue import Job
   return Job(*r) if r else None
  def update_job(self,job_id,status,**fields):
-  allowed={'started_at','completed_at','retry_count','last_error','worker_state','worker_id','lease_until'}; sets=['status=?']; vals=[status]
+  allowed={'started_at','completed_at','retry_count','last_error','worker_state','worker_id','lease_until','resume_at'}; sets=['status=?']; vals=[status]
   for k,v in fields.items():
    if k in allowed: sets.append(k+'=?'); vals.append(v)
   vals.append(job_id)
