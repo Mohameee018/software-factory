@@ -10,7 +10,7 @@ TRANSITIONS={
  WorkflowState.DOCUMENTATION:{WorkflowState.ANALYSIS,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.ANALYSIS:{WorkflowState.ARCHITECTURE,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.ARCHITECTURE:{WorkflowState.TASK_CREATION,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
- WorkflowState.TASK_CREATION:{WorkflowState.IMPLEMENTATION,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
+ WorkflowState.TASK_CREATION:{WorkflowState.PLANNING,WorkflowState.IMPLEMENTATION,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.IMPLEMENTATION:{WorkflowState.TESTING,WorkflowState.FIXING,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.TESTING:{WorkflowState.REVIEWING,WorkflowState.FIXING,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.REVIEWING:{WorkflowState.UX_REVIEW,WorkflowState.FIXING,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
