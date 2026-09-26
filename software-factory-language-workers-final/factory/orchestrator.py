@@ -51,6 +51,11 @@ class Orchestrator:
     def _agent_budget_allowed(self, project_id, role):
         return self.budget.check_role_or_event(project_id, role)
 
+    def run_agent(self, role, ctx):
+        if not self._agent_budget_allowed(ctx.project.id, role):
+            return AgentResult(success=False, agent_name=role, errors=[f"Agent budget exhausted for role: {role}"], summary="Agent role budget exhausted.")
+        return self.agents[role].run(ctx)
+
     def provider_info(self):
         configured = bool(self.model_router.specs_for('planner'))
         return {'provider': self.settings.provider, 'model': self.settings.model, 'configured': configured, 'mock': self.settings.mode in ('mock','dry-run')}
@@ -352,7 +357,7 @@ class Orchestrator:
                 self.set_state(p,WorkflowState.REQUIREMENTS_GATHERING); continue
             if s==WorkflowState.REQUIREMENTS_GATHERING:
                 self.notifier.agent_started(p, 'Requirements Specialist', 'بيجمع المتطلبات معاك بشكل حواري وبيسأل حسب السياق') if self.notifier else None
-                r=self.agents['requirements'].run(ctx); self.record(state,r)
+                r=self.run_agent('requirements', ctx); self.record(state,r)
                 if self._pause_for_quota(p,r,state): continue
                 if r.success and r.next_action=='ask_client':
                     if self.notifier:
@@ -381,7 +386,7 @@ class Orchestrator:
                 continue
             if s==WorkflowState.DESIGNING:
                 self.notifier.agent_started(p, 'UI/UX Designer Agent', 'بدأ تحديد الشاشات والـ user flow والـ design system') if self.notifier else None
-                r=self.agents['uiux'].run(ctx); self.record(state,r)
+                r=self.run_agent('uiux', ctx); self.record(state,r)
                 if self._pause_for_quota(p,r,state): continue
                 if r.success:
                     gate_errors=verify(WorkflowState.WAITING_FOR_DESIGN_APPROVAL,p.workspace_path,r)
@@ -451,7 +456,7 @@ class Orchestrator:
                 self.set_state(p,WorkflowState.PLANNING); continue
             if s==WorkflowState.PLANNING:
                 self.notifier.agent_started(p, 'Planner Agent', 'بدأ تحليل المتطلبات وتحويلها إلى خطة تنفيذ') if self.notifier else None
-                r=self.agents['planner'].run(ctx); self.record(state,r)
+                r=self.run_agent('planner', ctx); self.record(state,r)
                 if self._pause_for_quota(p,r,state): continue
                 self.set_state(p,WorkflowState.DOCUMENTATION if r.success else WorkflowState.BLOCKED); continue
             if s==WorkflowState.DOCUMENTATION:
@@ -462,7 +467,7 @@ class Orchestrator:
                 continue
             if s==WorkflowState.ANALYSIS:
                 self.notifier.agent_started(p, 'Analyzer Agent', 'بدأ تحليل الـ architecture والمتطلبات التقنية') if self.notifier else None
-                r=self.agents['analyzer'].run(ctx); self.record(state,r)
+                r=self.run_agent('analyzer', ctx); self.record(state,r)
                 if self._pause_for_quota(p,r,state): continue
                 if r.success:
                     state.retry_counts.pop('analyzer_provider', None)
@@ -483,7 +488,7 @@ class Orchestrator:
                         if self.notifier:
                             try:self.notifier._send(f'🔧 <b>#ANALYZER</b> لقى {len(blocking_items)} ملاحظات مؤثرة. بدء corrective planning pass ({cycle+1}/3) بدل إيقاف المشروع.')
                             except Exception:pass
-                        pr=self.agents['planner'].run(ctx); self.record(state,pr)
+                        pr=self.run_agent('planner', ctx); self.record(state,pr)
                         if self._pause_for_quota(p,pr,state): continue
                         if pr.success:
                             continue
@@ -526,7 +531,7 @@ class Orchestrator:
                 continue
             if s==WorkflowState.ARCHITECTURE:
                 self.notifier.agent_started(p, 'Architect Agent', 'بدأ تحويل المتطلبات والتصميم المعتمد إلى معمارية قابلة للتنفيذ') if self.notifier else None
-                r=self.agents['architect'].run(ctx); self.record(state,r)
+                r=self.run_agent('architect', ctx); self.record(state,r)
                 if self._pause_for_quota(p,r,state): continue
                 gate_errors=verify(WorkflowState.ARCHITECTURE,p.workspace_path,r)
                 if r.success and not gate_errors:
@@ -547,13 +552,13 @@ class Orchestrator:
                         if self.notifier:
                             try:self.notifier._send('🔗 <b>#TRACEABILITY</b> في requirements لسه مش مربوطة بمهام. corrective planning pass قبل التنفيذ.')
                             except Exception:pass
-                        pr=self.agents['planner'].run(ctx); self.record(state,pr)
+                        pr=self.run_agent('planner', ctx); self.record(state,pr)
                         if self._pause_for_quota(p,pr,state): continue
                         if pr.success: continue
                     self.db.save_state(state)
                     self.set_state(p,WorkflowState.BLOCKED); continue
                 self.notifier.agent_started(p, 'Manager Agent', 'بيتحقق إن كل requirement متغطية وبيوزع المهام والـskills تلقائيًا') if self.notifier else None
-                mr=self.agents['manager'].run(ctx); self.record(state,mr)
+                mr=self.run_agent('manager', ctx); self.record(state,mr)
                 if self._pause_for_quota(p,mr,state): continue
                 if mr.success:
                     assignments=(mr.detailed_output or {}).get('assignments',[]) if isinstance(mr.detailed_output,dict) else []
@@ -627,7 +632,7 @@ class Orchestrator:
                     continue
                 else:
                     self.notifier.agent_started(p, 'Test / QA Agent', 'بدأ تشغيل الاختبارات والتحقق من الوظائف') if self.notifier else None
-                    r=self.agents['tester'].run(ctx)
+                    r=self.run_agent('tester', ctx)
                 self.record(state,r)
                 gate_errors=[] if effective_mock else verify(WorkflowState.TESTING,p.workspace_path,r)
                 if gate_errors:
@@ -650,7 +655,7 @@ class Orchestrator:
                     r=AgentResult(success=True,agent_name='Code Reviewer',summary='Mock review.',next_action='security',files_created=['docs/CODE_REVIEW.md'],completion_evidence=['docs/CODE_REVIEW.md'])
                 else:
                     self.notifier.agent_started(p, 'Code Reviewer', 'بدأ مراجعة الكود والجودة والمخاطر') if self.notifier else None
-                    r=self.agents['reviewer'].run(ctx)
+                    r=self.run_agent('reviewer', ctx)
                 self.record(state,r)
                 gate_errors=verify(WorkflowState.REVIEWING,p.workspace_path,r)
                 if gate_errors:
@@ -675,7 +680,7 @@ class Orchestrator:
                     r=AgentResult(success=True,agent_name='UI/UX Reviewer',summary='Mock UI/UX review passed.',next_action='security',files_created=['docs/UX_REVIEW.md'],completion_evidence=['docs/UX_REVIEW.md'])
                 else:
                     self.notifier.agent_started(p, 'UI/UX Reviewer', 'بدأ مقارنة التنفيذ بالتصميم المعتمد') if self.notifier else None
-                    r=self.agents['uiux_reviewer'].run(ctx)
+                    r=self.run_agent('uiux_reviewer', ctx)
                 self.record(state,r)
                 gate_errors=verify(WorkflowState.UX_REVIEW,p.workspace_path,r)
                 if gate_errors:
@@ -702,7 +707,7 @@ class Orchestrator:
                     r=AgentResult(success=True,agent_name='Security Reviewer',summary='Mock security review.',next_action='ready',files_created=['docs/SECURITY_REVIEW.md'],completion_evidence=['docs/SECURITY_REVIEW.md'])
                 else:
                     self.notifier.agent_started(p, 'Security Reviewer', 'بدأ فحص الأمان والثغرات') if self.notifier else None
-                    r=self.agents['security'].run(ctx)
+                    r=self.run_agent('security', ctx)
                 self.record(state,r)
                 gate_errors=verify(WorkflowState.SECURITY_REVIEW,p.workspace_path,r)
                 if gate_errors:
@@ -716,7 +721,7 @@ class Orchestrator:
                     self.set_state(p,WorkflowState.BLOCKED)
                     continue
                 # Independent audit is deliberately outside the security/reviewer agents.
-                ar=self.agents['auditor'].run(ctx) if not effective_mock else AgentResult(success=True,agent_name='AI Auditor',summary='Mock audit passed.',next_action='ready',completion_evidence=[])
+                ar=self.run_agent('auditor', ctx) if not effective_mock else AgentResult(success=True,agent_name='AI Auditor',summary='Mock audit passed.',next_action='ready',completion_evidence=[])
                 self.record(state,ar)
                 if ar.success:
                     self.set_state(p,WorkflowState.READY_FOR_HUMAN)
@@ -745,7 +750,7 @@ class Orchestrator:
                     return state
                 if latest.status==ApprovalStatus.APPROVED:
                     # Final approval unlocks deterministic release packaging.
-                    r=self.agents['release'].run(ctx)
+                    r=self.run_agent('release', ctx)
                     self.record(state,r)
                     if r.success:
                         self.set_state(p,WorkflowState.COMPLETED)
