@@ -159,3 +159,26 @@ docker compose up -d
 ```
 
 The named data volume is not removed by this update procedure.
+
+## Control dashboard
+
+The factory includes a lightweight read-only control dashboard. It exposes project state, task progress, queue depth, jobs and approvals.
+
+Set:
+
+- `DASHBOARD_PORT=8080`
+- `DASHBOARD_TOKEN=<strong-random-secret>`
+
+If `DASHBOARD_TOKEN` is set, clients must send `Authorization: Bearer <token>`. Do not expose the dashboard publicly without authentication.
+
+Run locally with:
+
+```
+factory dashboard --host 127.0.0.1 --port 8080
+```
+
+The Compose deployment includes an optional `dashboard` service on port 8080.
+
+## AI project budgets
+
+Each project has a persistent agent-run budget to prevent runaway autonomous loops. Configure `MAX_AGENT_RUNS` (default 250). A project that exhausts the budget is moved to `WAITING_FOR_QUOTA` and keeps its state/evidence for resume or human intervention.
