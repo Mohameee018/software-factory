@@ -13,6 +13,32 @@ class RoleRouter:
     def __init__(self, parent, role):
         self.parent, self.role = parent, role
         self.last_model = None
+        self.last_attempts = []
+        self.last_skipped = []
+
+    def _failed_models(self):
+        if not self.parent.project_id or not self.parent.db:
+            return set()
+        state = self.parent.db.get_state(self.parent.project_id)
+        return set(state.failed_models_by_role.get(self.role, []) if state else [])
+
+    def _record_failure(self, label):
+        pid = self.parent.project_id
+        if not pid or not self.parent.db:
+            return
+        state = self.parent.db.get_state(pid)
+        if not state:
+            return
+        models = state.failed_models_by_role.setdefault(self.role, [])
+        if label not in models:
+            models.append(label)
+            self.parent.db.save_state(state)
+        try:
+            from factory.models import WorkflowEvent
+            self.parent.db.event(WorkflowEvent(project_id=pid,event_type='MODEL_FAILED_FOR_PROJECT',details={'role': self.role, 'model': label}))
+        except Exception:
+            pass
+
 
     @property
     def is_mock(self):
@@ -20,8 +46,14 @@ class RoleRouter:
 
     def _run(self, method, *args, **kwargs):
         attempts=[]; quota_models=[]; last_error=None
+        failed_models = self._failed_models()
+        self.last_skipped = []
         for spec in self.parent.specs_for(self.role):
-            label=spec['label']; attempts.append(label)
+            label=spec['label']
+            if label in failed_models:
+                self.last_skipped.append(label)
+                continue
+            attempts.append(label)
             self.parent._notify(self.role, label, 'attempt')
             try:
                 provider=self.parent.provider_for(spec)
@@ -35,11 +67,12 @@ class RoleRouter:
                     quota_models.append(label)
                     self.parent._notify(self.role, label, 'quota')
                 else:
+                    self._record_failure(label)
                     self.parent._notify(self.role, label, 'failed')
         self.last_attempts=attempts
         if attempts and len(quota_models)==len(attempts):
             raise AIQuotaExhausted(self.role, attempts, self.parent.next_quota_time())
-        raise RuntimeError('MODEL_FAILOVER_EXHAUSTED role=%s attempts=%s last_error=%s' % (self.role, ','.join(attempts), str(last_error)[:1000]))
+        raise RuntimeError('MODEL_FAILOVER_EXHAUSTED role=%s attempts=%s skipped=%s last_error=%s' % (self.role, ','.join(attempts), ','.join(self.last_skipped), str(last_error)[:1000]))
 
     def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
         return self._run('generate_json', system, prompt, schema, timeout=timeout, images=images)
@@ -48,9 +81,13 @@ class RoleRouter:
         return self._run('generate', system, prompt, timeout=timeout)
 
 class ModelRouter:
-    def __init__(self, settings, notifier=None):
-        self.settings, self.notifier = settings, notifier
+    def __init__(self, settings, notifier=None, db=None):
+        self.settings, self.notifier, self.db = settings, notifier, db
+        self.project_id = None
         self._providers={}
+
+    def set_project_context(self, project_id):
+        self.project_id = project_id
 
     def for_role(self, role):
         return RoleRouter(self, role)
