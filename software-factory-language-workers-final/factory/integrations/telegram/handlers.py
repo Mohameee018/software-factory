@@ -18,9 +18,13 @@ class TelegramHandlers:
     async def help(self, update, context): await update.effective_message.reply_text('/new /projects /project <id> /status <id> /tasks <id> /run <id> /pause <id> /resume <id> /cancel <id> /retry <id> /logs <id> /approve <id> /reject <id> /review <id> /feedback <id> <text>')
     async def new(self, update, context):
         if context.args:
-            description=' '.join(context.args); p=self.service.create_project('Telegram Project',description); context.user_data['active_project_id']=p.id; effective_user=getattr(update,'effective_user',None); db=getattr(self.service,'db',None);
+            description=' '.join(context.args); p=self.service.create_project('Telegram Project',description)
+            context.user_data['active_project_id']=p.id; effective_user=getattr(update,'effective_user',None); db=getattr(self.service,'db',None)
             if effective_user and db and hasattr(db,'set_active_project'): db.set_active_project(effective_user.id,p.id)
-            self._enqueue(p.id); await update.effective_message.reply_text(f'Created <code>{p.id}</code>. 🚀 Execution queued.',parse_mode='HTML'); return
+            self.service.set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
+            await update.effective_message.reply_text(f'Created <code>{p.id}</code>. 🧑‍💼 #REQUIREMENTS هراجع اللي قلته وأسألك فقط عن اللي ناقص.',parse_mode='HTML')
+            await self._requirements_turn(update,context,p,description)
+            return
         context.user_data['awaiting_project']=True; await update.effective_message.reply_text('تمام. احكيلي عن المشروع براحتك، أو ابعت PRD/Design/صور/أي ملفات عندك.')
     async def text(self, update, context):
         raw = (update.effective_message.text or '').strip()
