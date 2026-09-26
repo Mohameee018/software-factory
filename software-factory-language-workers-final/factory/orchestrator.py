@@ -368,7 +368,9 @@ class Orchestrator:
                     approval=ApprovalService(self.db).request(p.id,'requirements_approval','PRD, requirements and acceptance criteria are ready. Review and approve them before the Manager starts planning.',Severity.MEDIUM,files=['docs/PRD.md','docs/REQUIREMENTS.md','docs/ACCEPTANCE_CRITERIA.md'])
                     state.approvals.append(approval.id); state.stage_evidence[WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL.value]=list(r.completion_evidence); self.db.save_state(state)
                     if self.notifier:
-                        try:self.notifier._send(f'📋 <b>#REQUIREMENTS</b> {r.summary}\nراجع الملفات، ولو تمام اكتب <b>تمام</b>.')
+                        try:
+                            self.notifier._send(f'📋 <b>#REQUIREMENTS</b> {r.summary}\nراجع الملفات، ولو تمام اكتب <b>تمام</b>.')
+                            self.notifier.send_requirements_package(p)
                         except Exception:pass
                     self.set_state(p,WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL)
                 else:
