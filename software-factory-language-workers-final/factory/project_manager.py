@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from factory.models import WorkflowState
+from factory.memory import load_user_memory
 
 
 class ProjectManager:
@@ -20,6 +21,12 @@ class ProjectManager:
             "summary": {"type": "string"},
         },
         "required": ["intent", "artifact", "summary"],
+    }
+
+    RESPONSE_SCHEMA = {
+        "type": "object",
+        "properties": {"reply": {"type": "string"}, "action": {"type": "string"}},
+        "required": ["reply", "action"],
     }
 
     def __init__(self, service):
@@ -80,6 +87,7 @@ class ProjectManager:
             f"Type: {project.project_type.value}\n"
             f"Last agent: {(state.timestamps.get('last_agent') if state else '')}\n"
             f"Recent events: {[e.event_type for e in recent]}\n"
+            f"Durable user preferences:\n{load_user_memory(self.service.settings.workspaces_root, user_id)[-6000:] if user_id is not None else ''}\n"
             f"User message: {text}"
         )
         instructions = (
@@ -97,6 +105,40 @@ class ProjectManager:
             return {"intent": intent, "artifact": str(data.get("artifact", "")), "summary": str(data.get("summary", ""))}
         except Exception:
             return {"intent": "feedback", "artifact": "", "summary": "سأتعامل مع الرسالة كملاحظة للمشروع."}
+
+    def respond(self, user_id: int | None, text: str, project=None) -> str:
+        """Generate the client-facing reply using durable user memory + factory learning."""
+        project = project or self._project(user_id)
+        if not project:
+            return "مفيش مشروع نشط حاليًا. اكتب /new ونبدأ."
+        try:
+            provider = self.service.model_router.for_role("manager")
+            state = self.service.db.get_state(project.id)
+            memory = load_user_memory(self.service.settings.workspaces_root, user_id) if user_id is not None else ""
+            learning_path = Path(self.service.settings.workspaces_root) / ".factory" / "FACTORY_LEARNING.md"
+            learning = learning_path.read_text(encoding="utf-8", errors="ignore")[-8000:] if learning_path.exists() else ""
+            recent = self.service.db.list_events(project.id, 12)
+            context = (
+                f"Project: {project.name} ({project.id})\n"
+                f"State: {project.current_state.value}\n"
+                f"Type: {project.project_type.value}\n"
+                f"Last agent: {(state.timestamps.get('last_agent') if state else '')}\n"
+                f"Recent events: {[e.event_type for e in recent]}\n"
+                f"Durable user preferences:\n{memory[-8000:]}\n"
+                f"Factory learning:\n{learning}\n"
+                f"User message: {text}"
+            )
+            instructions = (
+                "You are the permanent client-facing AI manager of a software factory. "
+                "Reply naturally in Egyptian Arabic unless the user writes mainly English. "
+                "Understand the user's intent quickly using durable preferences and factory learning. "
+                "Never invent progress, files, actions, or approvals. If the message is a request, "
+                "briefly state what the factory understood and what will happen next. Keep it concise."
+            )
+            data = provider.generate_json(instructions, context, self.RESPONSE_SCHEMA, timeout=min(self.service.settings.ai_timeout, 60))
+            return str(data.get("reply", "")).strip() or "تمام، فهمت كلامك وسجلته ضمن سياق المشروع."
+        except Exception:
+            return "تمام، فهمت كلامك وسجلته ضمن سياق المشروع، وهخليه يدخل في المتابعة الجاية."
 
     @staticmethod
     def progress_map(project) -> str:
