@@ -739,6 +739,15 @@ class Orchestrator:
                 approvals=[a for a in self.db.list_approvals(p.id) if a.requested_action=='final_approval']
                 latest=approvals[-1] if approvals else None
                 if latest is None:
+                    if self.github.enabled:
+                        try:
+                            repo=self.github.repo_info(p.workspace_path)
+                            if repo:
+                                pushed=self.gitflow.commit_and_push(p.workspace_path, p.git_branch, "chore(factory): prepare human review")
+                                pr=self.gitflow.create_or_get_pull_request(repo["full_name"], p.git_branch, "main", f"Factory review: {p.name}", "Automated draft PR prepared after Final Gate passed. Human approval is still required.")
+                                self.db.event(WorkflowEvent(project_id=p.id,event_type='GITHUB_PR_READY',details={'repository':repo['full_name'],'branch':p.git_branch,'pr':pr,'push':pushed}))
+                        except Exception as exc:
+                            self.db.event(WorkflowEvent(project_id=p.id,event_type='GITHUB_PR_FAILED',details={'error':str(exc)[:2000]}))
                     approval=ApprovalService(self.db).request(p.id,'final_approval','Implementation, tests, code review, UI/UX review and security review are complete. Final human approval is required for release.',Severity.MEDIUM)
                     state.approvals.append(approval.id); self.db.save_state(state)
                     if self.notifier:
