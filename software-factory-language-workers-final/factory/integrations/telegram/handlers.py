@@ -278,6 +278,17 @@ class TelegramHandlers:
         p=await self._require_project(update,context)
         if p: await update.effective_message.reply_text(self.manager.status_message(p),parse_mode='HTML')
 
+    async def audit(self, update, context):
+        from factory.supervisor import FactorySupervisor
+        supervisor = FactorySupervisor(self.service, getattr(self.service, "job_queue", None))
+        ok = supervisor.run_audit()
+        await update.effective_message.reply_text(
+            "🧠 <b>Factory Audit</b> اتعمل دلوقتي.\n"
+            + ("✅ التقرير اتولد واتحدثت ذاكرة المصنع." if ok else "⚠️ التقرير اتولد لكن فيه مشكلة في تشغيل الـAI audit.")
+            + "\n📄 شوف التقرير اليومي داخل .factory/FACTORY_AUDIT_YYYY-MM-DD.md",
+            parse_mode="HTML",
+        )
+
     async def requirements(self, update, context):
         p=await self._require_project(update,context)
         if p: await self._send_requested_artifacts(update,context,p,'requirements')
@@ -346,7 +357,11 @@ class TelegramHandlers:
         if len(context.args)<2: await update.effective_message.reply_text('Usage: /feedback <project_id> <feedback>'); return
         p=self.service.db.get_project(context.args[0]);
         if not p: await update.effective_message.reply_text('Project not found.'); return
-        self.service.add_feedback(p.id,' '.join(context.args[1:])); self._enqueue(p.id,priority=90); await update.effective_message.reply_text('Feedback saved as new work and queued.')
+        feedback=' '.join(context.args[1:])
+        self.service.add_feedback(p.id,feedback)
+        self._enqueue(p.id,priority=90)
+        reply=self.manager.respond(getattr(update.effective_user,'id',None),feedback,p)
+        await update.effective_message.reply_text(reply + "\n\n📌 اتسجلت كمهمة واتحطت في الـworkflow.",parse_mode='HTML')
     async def callback(self, update, context):
         q=update.callback_query; await q.answer()
         if not self.service.authorized(update): return
