@@ -17,7 +17,6 @@ class RoleRouter:
     @property
     def is_mock(self):
         return self.parent.settings.mode in ('mock','dry-run') or all(x['provider']=='mock' for x in self.parent.specs_for(self.role))
-        self.last_attempts = []
 
     def _run(self, method, *args, **kwargs):
         attempts=[]; quota_models=[]; last_error=None
@@ -63,20 +62,29 @@ class ModelRouter:
         key='AI_MODELS_'+re.sub(r'[^A-Z0-9]', '_', role.upper())
         raw=os.getenv(key,'').strip()
         specs=[]
+        def add_item(item):
+            item=item.strip()
+            if not item: return
+            if ':' in item:
+                provider,model=item.split(':',1)
+                provider,model=provider.strip().lower(),model.strip()
+            else:
+                model=item
+                low=model.lower()
+                if low.startswith('gpt-'): provider='openai'
+                elif low.startswith('gemini-'): provider='gemini'
+                elif low.startswith('claude-'): provider='anthropic'
+                else: provider=str(self.settings.provider).strip().lower()
+            if provider and model:
+                label=f'{provider}:{model}'
+                if not any(x['label']==label for x in specs):
+                    specs.append({'provider':provider,'model':model,'label':label})
         if raw:
-            for item in raw.split(','):
-                if ':' not in item: continue
-                provider,model=item.split(':',1); provider,model=provider.strip().lower(),model.strip()
-                if provider and model: specs.append({'provider':provider,'model':model,'label':f'{provider}:{model}'})
+            for item in raw.split(','): add_item(item)
         if not specs: specs=[self._default_spec()]
         global_raw=os.getenv('AI_MODELS','').strip()
         if global_raw:
-            for item in global_raw.split(','):
-                if ':' not in item: continue
-                provider,model=item.split(':',1); provider,model=provider.strip().lower(),model.strip()
-                label=f'{provider}:{model}'
-                if provider and model and not any(x['label']==label for x in specs):
-                    specs.append({'provider':provider,'model':model,'label':label})
+            for item in global_raw.split(','): add_item(item)
         return specs
 
     def provider_for(self, spec):
