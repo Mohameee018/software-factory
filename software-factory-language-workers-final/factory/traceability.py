@@ -55,7 +55,12 @@ def _task_ids(docs:Path)->list[tuple[str,str]]:
     return [(f'T-{i:03d}',x) for i,x in enumerate(_items(p.read_text(encoding='utf-8',errors='ignore')),1)]
 
 def _tokens(text:str)->set[str]:
-    return {w.lower() for w in re.findall(r'[A-Za-z0-9_]{4,}|[\u0600-\u06ff]{4,}',text)}
+    raw={w.lower() for w in re.findall(r'[A-Za-z0-9_]{3,}|[\u0600-\u06ff]{4,}',text)}
+    normalized=set(raw)
+    for word in raw:
+        if len(word)>4 and word.endswith('s'):
+            normalized.add(word[:-1])
+    return normalized
 
 def build_report(workspace:str)->TraceabilityReport:
     root=Path(workspace); docs=root/'docs'
@@ -64,7 +69,13 @@ def build_report(workspace:str)->TraceabilityReport:
     for rid,req in reqs:
         words=_tokens(req); hits=[]
         for ti,(tid,task) in enumerate(tasks,1):
-            if words and len(words & _tokens(task)) >= max(1,min(3,len(words))): hits.append(ti)
+            task_words=_tokens(task)
+            if re.search(rf'(?<![A-Z0-9]){re.escape(rid)}(?![A-Z0-9])', task, re.I):
+                hits.append(ti); continue
+            overlap=len(words & task_words)
+            threshold=max(1,min(2,len(words)))
+            if words and overlap >= threshold:
+                hits.append(ti)
         mapped[rid]=hits
         if not hits: unmapped.append(f'{rid}: {req}')
     return TraceabilityReport([f'{i}: {t}' for i,t in reqs],mapped,unmapped,len(tasks),bool(reqs) and bool(tasks) and not unmapped)
