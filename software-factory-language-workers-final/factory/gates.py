@@ -40,9 +40,8 @@ def verify(stage: WorkflowState, workspace: str, result: AgentResult | None = No
                         errors.append(f"expected_file_missing:{expected}")
             if not changed and not task.files_expected:
                 errors.append("developer_produced_no_file_changes")
-            if result.commands_executed and any(
-                "exit=" in str(x) and not str(x).endswith("exit=0") for x in result.generated_changes
-            ):
+            failed_commands=[x for x in result.generated_changes if isinstance(x,dict) and x.get("op")=="run" and int(x.get("exit_code",0))!=0]
+            if failed_commands:
                 errors.append("developer_reported_failed_command")
 
     elif stage == WorkflowState.TESTING:
@@ -68,7 +67,7 @@ def verify(stage: WorkflowState, workspace: str, result: AgentResult | None = No
             errors.append("security_review_not_passed")
 
     elif stage == WorkflowState.READY_FOR_HUMAN:
-        required = ("docs/DESIGN.md","docs/PRD.md","docs/ARCHITECTURE.md","docs/ACCEPTANCE_CRITERIA.md")
+        required = ("docs/DESIGN.md","docs/PRD.md","docs/ARCHITECTURE.md","docs/ACCEPTANCE_CRITERIA.md","docs/TEST_REPORT.md","docs/CODE_REVIEW.md","docs/UX_REVIEW.md","docs/SECURITY_REVIEW.md")
         errors += [f"final_artifact_missing:{p}" for p in _missing(root, required)]
 
     return errors
