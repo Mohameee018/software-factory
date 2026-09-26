@@ -91,10 +91,10 @@ def _workflow_smoke(root: Path) -> None:
 
     # Start from the design-approved boundary so the self-test exercises the
     # implementation/QA/review/security/final-gate path without needing an LLM.
-    project.current_state = WorkflowState.DESIGN_APPROVED
+    project.current_state = WorkflowState.DESIGNING
     orchestrator.db.save_project(project)
     state = orchestrator.db.get_state(project.id)
-    state.current_state = WorkflowState.DESIGN_APPROVED
+    state.current_state = WorkflowState.DESIGNING
     orchestrator.db.save_state(state)
 
     state = orchestrator.run(project.id, mock=True)
