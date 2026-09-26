@@ -109,6 +109,26 @@ class TelegramHandlers:
         else:
             await update.effective_message.reply_text('⚠️ '+(r.summary or 'محتاج أعيد محاولة جمع المتطلبات.'))
 
+    async def document(self, update, context):
+        doc=update.effective_message.document
+        pid=context.user_data.get('active_project_id') or self.service.db.get_active_project(update.effective_user.id)
+        if pid and self.service.db.get_project(pid):
+            p=self.service.db.get_project(pid)
+        else:
+            p=self.service.create_project('Telegram Project', (update.effective_message.caption or '').strip() or f'Client project with attached file: {doc.file_name}')
+            context.user_data['active_project_id']=p.id; self.service.db.set_active_project(update.effective_user.id,p.id)
+            self.service.set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
+        target=Path(p.workspace_path)/'docs'/'attachments'/doc.file_name
+        target.parent.mkdir(parents=True,exist_ok=True)
+        tg_file=await doc.get_file(); await tg_file.download_to_drive(custom_path=str(target))
+        self.service.db.event(WorkflowEvent(project_id=p.id,event_type='PROJECT_FILE_RECEIVED',details={'path':str(target.relative_to(Path(p.workspace_path))),'name':doc.file_name}))
+        if p.current_state==WorkflowState.REQUIREMENTS_GATHERING:
+            await self._requirements_turn(update,context,p,f'أرفقت الملف: {doc.file_name}. افهمه واستخدمه بدل ما تسألني عن معلومات موجودة فيه.')
+        else:
+            self._enqueue(p.id,priority=100)
+            await update.effective_message.reply_text(f'📎 استلمت {doc.file_name} وضمّيته لسياق المشروع.')
+        return
+
     async def photo(self, update, context):
         caption=(update.effective_message.caption or '').strip()
         if not caption:
