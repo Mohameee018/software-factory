@@ -104,6 +104,14 @@ class OpenAICompatibleProvider(HTTPProvider):
         return self.validate_structured(value,schema)
 
 class AnthropicProvider(HTTPProvider):
+    def generate(self, system, prompt, *, timeout=None):
+        body={'model':self.model,'max_tokens':8192,'system':system,'messages':[{'role':'user','content':prompt}]}
+        data=self._request(f'{self.base_url}/messages',body,{'x-api-key':self.api_key,'anthropic-version':'2023-06-01','content-type':'application/json'},timeout)
+        text=''.join(x.get('text','') for x in data.get('content',[]) if x.get('type')=='text').strip()
+        usage=data.get('usage') or {}
+        self.last_usage=usage
+        return LLMResponse(text,data.get('model',self.model),usage.get('input_tokens'),usage.get('output_tokens'),data)
+
     def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
         if not images:
             response=self.generate(system,prompt + '\\nReturn ONLY valid JSON matching this schema:\\n' + json.dumps(schema),timeout=timeout)
