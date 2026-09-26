@@ -128,3 +128,54 @@ class AnthropicProvider(HTTPProvider):
         try: value=json.loads(text)
         except json.JSONDecodeError as exc: raise ValueError(f'Provider returned invalid structured JSON: {text[:500]}') from exc
         return self.validate_structured(value,schema)
+
+
+class OpenAIResponsesProvider(HTTPProvider):
+    """Direct OpenAI Responses API provider for reasoning/coding models."""
+
+    def _extract_text(self, data):
+        if isinstance(data.get('output_text'), str):
+            return data['output_text'].strip()
+        parts = []
+        for item in data.get('output') or []:
+            for content in item.get('content') or []:
+                if content.get('type') in ('output_text', 'text') and isinstance(content.get('text'), str):
+                    parts.append(content['text'])
+        return ''.join(parts).strip()
+
+    def _input(self, system, prompt, images=None):
+        content=[{'type':'input_text','text':prompt}]
+        for x in images or []:
+            content.append({'type':'input_image','image_url':'data:%s;base64,%s' % (x['mime_type'],x['data'])})
+        return [
+            {'role':'system','content':[{'type':'input_text','text':system}]},
+            {'role':'user','content':content},
+        ]
+
+    def generate(self, system, prompt, *, timeout=None):
+        body={'model':self.model,'input':self._input(system,prompt)}
+        data=self._request(f'{self.base_url}/responses',body,
+            {'Authorization':f'Bearer {self.api_key}','Content-Type':'application/json'},timeout)
+        text=self._extract_text(data)
+        usage=data.get('usage') or {}
+        self.last_usage=usage
+        return LLMResponse(text,data.get('model',self.model),usage.get('input_tokens'),usage.get('output_tokens'),data)
+
+    def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
+        body={
+            'model':self.model,
+            'input':self._input(system,prompt,images),
+            'text':{'format':{'type':'json_schema','name':'factory_output','schema':schema,'strict':True}},
+        }
+        data=self._request(f'{self.base_url}/responses',body,
+            {'Authorization':f'Bearer {self.api_key}','Content-Type':'application/json'},timeout)
+        text=self._extract_text(data)
+        if not text:
+            raise ValueError('Provider returned empty structured output')
+        try:
+            value=json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f'Provider returned invalid structured JSON: {text[:500]}') from exc
+        usage=data.get('usage') or {}
+        self.last_usage=usage
+        return self.validate_structured(value,schema)
