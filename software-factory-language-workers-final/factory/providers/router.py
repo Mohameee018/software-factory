@@ -83,7 +83,24 @@ class ModelRouter:
                     specs.append({'provider':provider,'model':model,'label':label})
         if raw:
             for item in raw.split(','): add_item(item)
-        if not specs: specs=[self._default_spec()]
+        if not specs:
+            specs=[self._default_spec()]
+            # If no role-specific pool was configured, build a safe automatic
+            # failover pool from credentials already present in the deployment.
+            # Never introduce a paid provider unless its API key is already set.
+            base_url=str(self.settings.api_base_url).lower()
+            current_provider=str(self.settings.provider).strip().lower()
+            if current_provider == 'openai-compatible' and 'generativelanguage.googleapis.com' in base_url:
+                # Gemini Flash models use the same OpenAI-compatible endpoint and
+                # key, while different model buckets can have independent limits.
+                for model_name in ('gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash'):
+                    add_item(f'openai-compatible:{model_name}')
+            if os.getenv('OPENAI_API_KEY'):
+                add_item('openai:gpt-5.6-terra')
+            if os.getenv('GROQ_API_KEY'):
+                add_item('groq:openai/gpt-oss-120b')
+            if os.getenv('ANTHROPIC_API_KEY'):
+                add_item('anthropic:claude-sonnet-5')
         global_raw=os.getenv('AI_MODELS','').strip()
         if global_raw:
             for item in global_raw.split(','): add_item(item)
