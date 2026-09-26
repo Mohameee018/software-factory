@@ -13,5 +13,9 @@ class SecurityAgent(Agent):
     except Exception:continue
     for pat in patterns:
      if pat.search(t):hits.append(str(p.relative_to(context.workspace)))
-  if hits:return AgentResult(success=False,agent_name=self.name,summary='Potential hard-coded secrets detected.',errors=hits,next_action='fix')
-  return AgentResult(success=True,agent_name=self.name,summary='Security scan completed with no obvious hard-coded secrets.',next_action='ready')
+  report=Path(context.workspace)/'docs'/'SECURITY_REVIEW.md'; report.parent.mkdir(parents=True,exist_ok=True)
+  if hits:
+   report.write_text('# Security Review\\n\\nFAIL\\n\\n'+ '\\n'.join(hits),encoding='utf-8')
+   return AgentResult(success=False,agent_name=self.name,summary='Potential hard-coded secrets detected.',errors=hits,next_action='fix',files_created=['docs/SECURITY_REVIEW.md'],completion_evidence=['docs/SECURITY_REVIEW.md'])
+  report.write_text('# Security Review\\n\\nPASS\\n\\nNo obvious hard-coded secrets were detected by the configured scan.',encoding='utf-8')
+  return AgentResult(success=True,agent_name=self.name,summary='Security scan completed with no obvious hard-coded secrets.',next_action='ready',files_created=['docs/SECURITY_REVIEW.md'],completion_evidence=['docs/SECURITY_REVIEW.md'])
