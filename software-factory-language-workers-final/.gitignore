@@ -1,1 +1,14 @@
-.env\n.env.*\n!.env.example\n__pycache__/\n*.py[cod]\n.pytest_cache/\n.ruff_cache/\n.mypy_cache/\n.venv/\nvenv/\n*.db\n*.db-*\n/data/\n/workspaces/\n.factory/\n
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+*.db
+*.db-*
+/data/
+/workspaces/
