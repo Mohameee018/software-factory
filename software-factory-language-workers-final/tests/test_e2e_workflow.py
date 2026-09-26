@@ -107,7 +107,7 @@ class ClothesStoreProvider(AIProvider):
                 'PRD':'# Clothes Store\nFlutter local clothing store.',
                 'MVP':'# MVP\nBrowse, details, cart.',
                 'ARCHITECTURE':'# Architecture\nCore Flutter only.',
-                'REQUIREMENTS':'# Requirements\nMen, Women, Kids; local data; no backend.',
+                'REQUIREMENTS':'# Requirements\n- Men, Women, Kids; local data; no backend.',
                 'TASKS':'# Tasks\n1. Build Clothes Store UI for Men Women Kids | Depends: 0 | Acceptance: Home, categories, details, cart | Files: lib/main.dart, lib/models/product.dart, lib/data/products.dart, lib/screens/home_screen.dart, lib/screens/product_details_screen.dart, lib/screens/cart_screen.dart | Tests: widget tests',
                 'ACCEPTANCE_CRITERIA':'# Acceptance\n- Local mock data only\n- Cart total works',
                 'RISKS':'# Risks\n- Flutter SDK required.'
