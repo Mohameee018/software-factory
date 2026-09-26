@@ -136,9 +136,13 @@ def telegram():
  from factory.integrations.telegram.service import TelegramService
  from factory.server import build_worker
  s=get_settings(); s.ensure_directories(); db=build_database(s); service=TelegramService(db,s); _,_,worker=build_worker()
+ from factory.supervisor import FactorySupervisor
+ supervisor=FactorySupervisor(service,worker)
  worker_thread=threading.Thread(target=worker.run_forever,name='factory-worker',daemon=True); worker_thread.start()
+ supervisor.start()
  try: TelegramBot(service,s).run()
- finally: worker.stop(); worker_thread.join(timeout=10)
+ finally:
+  supervisor.stop(); worker.stop(); worker_thread.join(timeout=10)
 @app.command('dashboard')
 def dashboard():
  from factory.dashboard import run_dashboard
