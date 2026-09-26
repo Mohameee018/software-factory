@@ -26,6 +26,18 @@ def show_project(project_id:str):
 @app.command('run')
 def run(project_id:str,dry_run:bool=typer.Option(False,'--dry-run'),mock:bool=typer.Option(False,'--mock')):
  st=svc().run(project_id,dry_run=dry_run,mock=mock);typer.echo(f'Run finished: {st.current_state.value}; iterations={st.iteration_count}')
+@app.command('github-pr')
+def github_pr(project_id:str, title:str=typer.Option('Factory change','--title'), body:str=typer.Option('','--body')):
+ s=svc(); p=s.db.get_project(project_id)
+ if not p: raise typer.BadParameter('Project not found')
+ if not s.gitflow.enabled: raise typer.BadParameter('GitHub publishing is not configured')
+ info=s.github.repo_info(p.workspace_path)
+ if not info: raise typer.BadParameter('GitHub repository is not configured')
+ branch=p.git_branch
+ result=s.gitflow.commit_and_push(p.workspace_path, branch, title)
+ pr=s.gitflow.create_pull_request(info['full_name'], branch, 'main', title, body)
+ typer.echo(pr.get('url') or str(pr))
+
 @app.command('github-public')
 def github_public(project_id:str):
  s=svc(); p=s.db.get_project(project_id)
