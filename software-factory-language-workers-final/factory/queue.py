@@ -39,6 +39,14 @@ class FactoryWorker:
             if not job:
                 self._stop.wait(self.poll_interval); continue
             try:
+                def _renew():
+                    while True:
+                        if self._stop.wait(60): return
+                        try:
+                            if not self.queue.heartbeat(job.id, self.worker_id): return
+                        except Exception:
+                            return
+                threading.Thread(target=_renew,daemon=True).start()
                 current=self.orchestrator.db.get_project(job.project_id)
                 # UNKNOWN is allowed at intake. The factory must reach the UI/UX
                 # approval gate before implementation, and the stack may be decided later
