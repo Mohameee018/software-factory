@@ -366,14 +366,14 @@ class Orchestrator:
                     retry_key = 'analyzer_provider'
                     retry_count = state.retry_counts.get(retry_key, 0)
                     text_errors = ' '.join(errors).upper()
-                    transient = any(x in text_errors for (
+                    transient = any(x in text_errors for x in (
                         'AI PROVIDER HTTP 408', 'AI PROVIDER HTTP 409',
                         'AI PROVIDER HTTP 429', 'AI PROVIDER HTTP 500',
                         'AI PROVIDER HTTP 502', 'AI PROVIDER HTTP 503',
                         'AI PROVIDER HTTP 504', 'AI PROVIDER CONNECTION ERROR',
                         'TIMEOUT', 'TEMPORARILY UNAVAILABLE', 'HIGH DEMAND',
                     ))
-                    permanent = any(x in text_errors for (
+                    permanent = any(x in text_errors for x in (
                         'AI PROVIDER HTTP 400', 'AI PROVIDER HTTP 401',
                         'AI PROVIDER HTTP 403', 'AI PROVIDER HTTP 404',
                         'NOT_FOUND', 'NO LONGER AVAILABLE', 'API KEY IS REQUIRED',
