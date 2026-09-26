@@ -7,6 +7,7 @@ on:
 
 jobs:
   build-and-deploy:
+    if: ${{ secrets.JUSTRUNMY_REGISTRY_USERNAME != '' && secrets.JUSTRUNMY_REGISTRY_PASSWORD != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
