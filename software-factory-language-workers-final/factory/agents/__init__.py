@@ -13,3 +13,5 @@ from .uiux import UIUXAgent
 from .uiux_reviewer import UIUXReviewerAgent
 
 from .architect import ArchitectAgent
+
+from .auditor import AuditorAgent
