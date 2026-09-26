@@ -250,12 +250,12 @@ The factory supports role-specific model pools with automatic failover. Each AI 
 
 Use comma-separated provider:model values:
 
-AI_MODELS_UIUX=gemini:gemini-3.8-flash,openai:gpt-5.6,anthropic:claude-sonnet
-AI_MODELS_PLANNER=openai:gpt-5.6,gemini:gemini-3.8-flash
-AI_MODELS_ANALYZER=openai:gpt-5.6,gemini:gemini-3.8-flash
-AI_MODELS_DEVELOPER=anthropic:claude-sonnet,openai:gpt-5.6,gemini:gemini-3.8-flash
-AI_MODELS_REVIEWER=openai:gpt-5.6,anthropic:claude-sonnet
-AI_MODELS_UIUX_REVIEWER=gemini:gemini-3.8-flash,openai:gpt-5.6
+AI_MODELS_UIUX=openai:gpt-5.6-terra,gemini:gemini-3.8-flash,anthropic:claude-sonnet-5
+AI_MODELS_PLANNER=openai:gpt-5.6-sol,anthropic:claude-opus-5,gemini:gemini-3.8-flash
+AI_MODELS_ANALYZER=openai:gpt-5.6-terra,gemini:gemini-3.8-flash,anthropic:claude-sonnet-5
+AI_MODELS_DEVELOPER=openai:gpt-5.6-sol,anthropic:claude-opus-5,gemini:gemini-3.8-flash
+AI_MODELS_REVIEWER=openai:gpt-5.6-sol,anthropic:claude-opus-5,gemini:gemini-3.8-flash
+AI_MODELS_UIUX_REVIEWER=openai:gpt-5.6-terra,gemini:gemini-3.8-flash,anthropic:claude-sonnet-5
 
 Provider credentials are read from GEMINI_API_KEY, OPENAI_API_KEY, and ANTHROPIC_API_KEY. The existing AI_API_KEY remains supported for the currently configured provider.
 
