@@ -36,9 +36,19 @@ class ManagerAgent(Agent):
             p=d/name
             if p.exists(): parts.append(f"### {name}\n{p.read_text(encoding='utf-8',errors='ignore')[:22000]}")
         prompt="\n\n".join(parts)
-        try:data=self.provider.generate_json(self.instructions,prompt,SCHEMA,timeout=context.timeout)
+        try:
+            data=self.provider.generate_json(self.instructions,prompt,SCHEMA,timeout=context.timeout)
         except Exception as e:
-            return AgentResult(success=False,agent_name=self.name,summary="Manager validation failed.",errors=[str(e)],next_action="fix")
+            message=str(e)
+            if "AI_QUOTA_EXHAUSTED" in message:
+                return AgentResult(
+                    success=False,
+                    agent_name=self.name,
+                    summary="Manager paused because the available AI quota is exhausted.",
+                    errors=[message],
+                    next_action="resume_after_quota",
+                )
+            return AgentResult(success=False,agent_name=self.name,summary="Manager validation failed.",errors=[message],next_action="fix")
         if getattr(self.provider,"is_mock",False):
             data={"approved":True,"summary":"Manager validation passed.","issues":[],"assignments":[]}
         lines=["# Manager Plan","","## Validation",data.get("summary","")]
