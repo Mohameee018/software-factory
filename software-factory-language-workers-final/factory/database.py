@@ -72,9 +72,9 @@ class Database:
    return r.rowcount==1
 
  def claim_job(self,worker_id,worker_type='generic'):
+  self.reclaim_expired_jobs()
   with self.conn() as c:
    c.execute('BEGIN IMMEDIATE')
-   self.reclaim_expired_jobs()
 
    # Only one active worker may advance a project at a time. This keeps
    # Telegram retries, queue workers and future horizontal workers from
@@ -82,7 +82,7 @@ class Database:
    if worker_type == 'generic':
     row=c.execute("SELECT j.id FROM jobs j WHERE (j.status IN ('PENDING','RETRYING') OR (j.status='WAITING_QUOTA' AND j.resume_at IS NOT NULL AND julianday(j.resume_at)<=julianday(?))) AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.project_id=j.project_id AND r.status='RUNNING') ORDER BY (j.priority + CAST((julianday(?) - julianday(j.created_at))*10 AS INTEGER)) DESC,j.created_at LIMIT 1",(now().isoformat(),now().isoformat())).fetchone()
    else:
-    row=c.execute("SELECT j.id FROM jobs j WHERE (j.status IN ('PENDING','RETRYING') OR (j.status='WAITING_QUOTA' AND j.resume_at IS NOT NULL AND j.resume_at<=?)) AND j.worker_type=? AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.project_id=j.project_id AND r.status='RUNNING') ORDER BY j.priority DESC,j.created_at LIMIT 1",(now().isoformat(),worker_type,now().isoformat())).fetchone()
+    row=c.execute("SELECT j.id FROM jobs j WHERE (j.status IN ('PENDING','RETRYING') OR (j.status='WAITING_QUOTA' AND j.resume_at IS NOT NULL AND j.resume_at<=?)) AND j.worker_type=? AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.project_id=j.project_id AND r.status='RUNNING') ORDER BY (j.priority + CAST((julianday(?) - julianday(j.created_at))*10 AS INTEGER)) DESC,j.created_at LIMIT 1",(now().isoformat(),worker_type,now().isoformat())).fetchone()
    if not row:return None
    jid=row[0]; ts=now().isoformat(); lease=(datetime.now(timezone.utc)+timedelta(minutes=30)).isoformat()
    c.execute("UPDATE jobs SET status='RUNNING',started_at=COALESCE(started_at,?),worker_id=?,lease_until=?,worker_state='running',resume_at=NULL WHERE id=? AND (status IN ('PENDING','RETRYING') OR status='WAITING_QUOTA')",(ts,worker_id,lease,jid))
