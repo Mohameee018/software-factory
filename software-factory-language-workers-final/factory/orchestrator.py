@@ -355,7 +355,47 @@ class Orchestrator:
             if s==WorkflowState.DOCUMENTATION: self.set_state(p,WorkflowState.ANALYSIS); continue
             if s==WorkflowState.ANALYSIS:
                 self.notifier.agent_started(p, 'Analyzer Agent', 'بدأ تحليل الـ architecture والمتطلبات التقنية') if self.notifier else None
-                r=self.agents['analyzer'].run(ctx); self.record(state,r); self.set_state(p,WorkflowState.TASK_CREATION if r.success else WorkflowState.BLOCKED); continue
+                r=self.agents['analyzer'].run(ctx); self.record(state,r)
+                if r.success:
+                    state.retry_counts.pop('analyzer_provider', None)
+                    self.db.save_state(state)
+                    self.set_state(p,WorkflowState.TASK_CREATION)
+                else:
+                    errors = r.errors[-3:] or ['Analysis failed.']
+                    state.error_history.extend(errors)
+                    retry_key = 'analyzer_provider'
+                    retry_count = state.retry_counts.get(retry_key, 0)
+                    text_errors = ' '.join(errors).upper()
+                    transient = any(x in text_errors for (
+                        'AI PROVIDER HTTP 408', 'AI PROVIDER HTTP 409',
+                        'AI PROVIDER HTTP 429', 'AI PROVIDER HTTP 500',
+                        'AI PROVIDER HTTP 502', 'AI PROVIDER HTTP 503',
+                        'AI PROVIDER HTTP 504', 'AI PROVIDER CONNECTION ERROR',
+                        'TIMEOUT', 'TEMPORARILY UNAVAILABLE', 'HIGH DEMAND',
+                    ))
+                    permanent = any(x in text_errors for (
+                        'AI PROVIDER HTTP 400', 'AI PROVIDER HTTP 401',
+                        'AI PROVIDER HTTP 403', 'AI PROVIDER HTTP 404',
+                        'NOT_FOUND', 'NO LONGER AVAILABLE', 'API KEY IS REQUIRED',
+                        'AI MODEL IS REQUIRED', 'AI BASE URL IS REQUIRED',
+                    ))
+                    if transient and not permanent and retry_count < 3:
+                        delays = (5, 15, 30)
+                        delay = delays[retry_count]
+                        state.retry_counts[retry_key] = retry_count + 1
+                        self.db.save_state(state)
+                        if self.notifier:
+                            try:
+                                self.notifier._send(
+                                    f'🔁 <b>#FACTORY</b> مزود الـAI مشغول أو غير متاح مؤقتًا. '
+                                    f'هحاول تحليل المتطلبات تاني ({retry_count + 1}/3) بعد {delay} ثانية.'
+                                )
+                            except Exception:
+                                pass
+                        time.sleep(delay)
+                        continue
+                    self.set_state(p,WorkflowState.BLOCKED)
+                continue
             if s==WorkflowState.TASK_CREATION: self.ensure_tasks(p); self.set_state(p,WorkflowState.IMPLEMENTATION); continue
             if s==WorkflowState.IMPLEMENTATION:
                 t=self.next_task(p)
