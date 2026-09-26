@@ -9,7 +9,9 @@ _FLUTTER_PATTERNS = (r'\bflutter\b', r'\bdart\s+flutter\b')
 _PYTHON_PATTERNS = (r'\bpython\b', r'\bpython\s+app\b')
 
 def detect_project_type(description: str = '', workspace=None) -> ProjectType:
-    if workspace is not None:
+    # Empty/whitespace workspace values are not valid paths. Treating "" as Path("")
+    # points at the current process directory and can incorrectly override text detection.
+    if workspace is not None and str(workspace).strip():
         root = Path(workspace)
         if (root / 'pubspec.yaml').exists(): return ProjectType.FLUTTER
         if any((root / n).exists() for n in ('pom.xml','build.gradle','build.gradle.kts')): return ProjectType.JAVA

@@ -187,7 +187,7 @@ python -m compileall -q .
 pytest -q
 ```
 
-The current local validation in this environment is 73 passing tests. External Telegram, external AI credentials, and real Flutter SDK execution are not verified here.
+The current validated suite contains 116 tests; CI runs compileall, Ruff, and pytest on every push and pull request. External Telegram, external AI credentials, and real Flutter SDK execution are not verified here.
 
 ## Updating
 
