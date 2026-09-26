@@ -22,7 +22,7 @@ from factory.company_os import get_contract, select_team
 from factory.traceability import write_report
 from factory.project_memory import update_project_memory
 from factory.handoffs import create_handoff
-from factory.github import GitHubProjectPublisher
+from factory.github import GitHubProjectPublisher\nfrom factory.budget import BudgetManager\nfrom factory.artifacts import record_artifacts
 
 @dataclass
 class Context:
@@ -34,7 +34,7 @@ class Orchestrator:
     def __init__(self, db, settings, notifier=None):
         self.db, self.settings, self.notifier = db, settings, notifier
         self.github = GitHubProjectPublisher(settings)
-        self.job_queue = None
+        self.job_queue = None\n        self.budget = BudgetManager(db, settings)
         provider = build_provider(settings)
         self.model_router = ModelRouter(settings, notifier)
         self.agents = {
