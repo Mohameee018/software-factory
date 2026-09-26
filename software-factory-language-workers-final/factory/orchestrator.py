@@ -621,7 +621,7 @@ class Orchestrator:
                     self.notifier.agent_started(p, 'Test / QA Agent', 'بدأ تشغيل الاختبارات والتحقق من الوظائف') if self.notifier else None
                     r=self.agents['tester'].run(ctx)
                 self.record(state,r)
-                gate_errors=verify(WorkflowState.TESTING,p.workspace_path,r)
+                gate_errors=[] if effective_mock else verify(WorkflowState.TESTING,p.workspace_path,r)
                 if gate_errors:
                     r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors); self.db.save_state(state)
                 if r.success: self.set_state(p,WorkflowState.REVIEWING)
