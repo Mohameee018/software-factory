@@ -60,7 +60,7 @@ class Database:
   with self.conn() as c:
    c.execute('BEGIN IMMEDIATE')
    if worker_type == 'generic':
-    row=c.execute("SELECT id FROM jobs WHERE status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND resume_at<=?) ORDER BY priority DESC,created_at LIMIT 1",(now().isoformat(),)).fetchone()
+    row=c.execute("SELECT id FROM jobs WHERE status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND julianday(resume_at)<=julianday(?)) ORDER BY priority DESC,created_at LIMIT 1",(now().isoformat(),)).fetchone()
    else:
     row=c.execute("SELECT id FROM jobs WHERE (status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND resume_at<=?)) AND worker_type=? ORDER BY priority DESC,created_at LIMIT 1",(now().isoformat(),worker_type)).fetchone()
    if not row:return None
