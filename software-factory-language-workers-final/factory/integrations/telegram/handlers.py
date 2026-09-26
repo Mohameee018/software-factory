@@ -16,6 +16,18 @@ class TelegramHandlers:
         self.github=getattr(service,'github',None)
         self.notifier=getattr(service,'notifier',None)
         self.manager=ProjectManager(service)
+    async def _reply(self, update, text, **kwargs):
+        """Send a client message with the live roadmap whenever a project is active."""
+        pid = None
+        try:
+            pid = self.service.db.get_active_project(update.effective_user.id)
+        except Exception:
+            pass
+        project = self.service.db.get_project(pid) if pid else None
+        if project and isinstance(text, str):
+            text = text.rstrip() + "\n\n" + self.manager.progress_map(project)
+        return await self._reply(update, text, **kwargs)
+
     def _set_state(self, project, state):
         setter = getattr(self.service, 'set_state', None)
         if setter:
