@@ -23,6 +23,7 @@ from factory.traceability import write_report
 from factory.project_memory import update_project_memory
 from factory.handoffs import create_handoff
 from factory.github import GitHubProjectPublisher
+from factory.gitflow import GitFlow
 from factory.budget import BudgetManager
 from factory.artifacts import record_artifacts
 
@@ -36,6 +37,7 @@ class Orchestrator:
     def __init__(self, db, settings, notifier=None):
         self.db, self.settings, self.notifier = db, settings, notifier
         self.github = GitHubProjectPublisher(settings)
+        self.gitflow = GitFlow(settings)
         self.job_queue = None
         self.budget = BudgetManager(db, settings)
         provider = build_provider(settings)
