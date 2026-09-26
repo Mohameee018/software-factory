@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime, timezone
+import os
 import re
 from factory.models import *
 from factory.state import transition
@@ -41,7 +42,9 @@ class Orchestrator:
         uid = update.effective_user.id if update.effective_user else None
         cid = update.effective_chat.id if update.effective_chat else None
         users, chats = self.settings.telegram_allowed_user_ids, self.settings.telegram_allowed_chat_ids
-        if not users and not chats: return False
+        # Explicit opt-in public mode for deployments without an allowlist.
+        if not users and not chats:
+            return os.getenv('TELEGRAM_ALLOW_ALL', 'false').strip().lower() in {'1','true','yes','on'}
         return (not users or uid in users) and (not chats or cid in chats)
 
     def create_project(self, name, description, project_type=None):
