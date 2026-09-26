@@ -8,7 +8,7 @@ import re
 from factory.models import *
 from factory.state import transition
 from factory.database import Database
-from factory.agents import RequirementsAgent, ManagerAgent, PlannerAgent, AnalyzerAgent, ArchitectAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent, UIUXReviewerAgent
+from factory.agents import RequirementsAgent, ManagerAgent, PlannerAgent, AnalyzerAgent, ArchitectAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent, UIUXReviewerAgent, AuditorAgent
 from factory.approvals import ApprovalService
 from factory.adapters.registry import detect, by_name
 from factory.project_detection import detect_project_type
@@ -40,7 +40,7 @@ class Orchestrator:
         self.agents = {
             'requirements': RequirementsAgent(self.model_router.for_role('requirements')), 'manager': ManagerAgent(self.model_router.for_role('manager')), 'planner': PlannerAgent(self.model_router.for_role('planner')), 'analyzer': AnalyzerAgent(self.model_router.for_role('analyzer')), 'architect': ArchitectAgent(self.model_router.for_role('architect')),
             'developer': DeveloperAgent(self.model_router.for_role('developer')), 'tester': TesterAgent(),
-            'reviewer': ReviewerAgent(self.model_router.for_role('reviewer')), 'uiux_reviewer': UIUXReviewerAgent(self.model_router.for_role('uiux_reviewer')), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(self.model_router.for_role('uiux'))
+            'reviewer': ReviewerAgent(self.model_router.for_role('reviewer')), 'uiux_reviewer': UIUXReviewerAgent(self.model_router.for_role('uiux_reviewer')), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(self.model_router.for_role('uiux')), 'auditor': AuditorAgent(self.model_router.for_role('auditor'))
         }
 
     def provider_info(self):
@@ -674,14 +674,24 @@ class Orchestrator:
                 gate_errors=verify(WorkflowState.SECURITY_REVIEW,p.workspace_path,r)
                 if gate_errors:
                     r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors); self.db.save_state(state)
-                if r.success: self.set_state(p,WorkflowState.READY_FOR_HUMAN)
-                else:
+                if not r.success:
                     approval=ApprovalService(self.db).request(p.id,'Resolve security finding before continuing','Security reviewer reported a blocking security condition.',Severity.CRITICAL,files=r.errors)
                     state.approvals.append(approval.id); self.db.save_state(state)
                     if self.notifier:
                         try:self.notifier.approval_requested(approval)
                         except Exception:pass
                     self.set_state(p,WorkflowState.BLOCKED)
+                    continue
+                # Independent audit is deliberately outside the security/reviewer agents.
+                ar=self.agents['auditor'].run(ctx) if not effective_mock else AgentResult(success=True,agent_name='AI Auditor',summary='Mock audit passed.',next_action='ready',completion_evidence=[])
+                self.record(state,ar)
+                if ar.success:
+                    self.set_state(p,WorkflowState.READY_FOR_HUMAN)
+                else:
+                    errs=ar.errors[-8:] or ['Independent AI Auditor found blocking issues.']
+                    state.error_history.extend(errs); state.gate_failures.extend(errs); self.db.save_state(state)
+                    t=self._add_fix_task(p,'Fix independent audit findings','\n'.join(errs))
+                    self.set_state(p,WorkflowState.BLOCKED if t.retry_count>=self.settings.max_retries else WorkflowState.FIXING)
                 continue
             if s==WorkflowState.FIXING: self.set_state(p,WorkflowState.IMPLEMENTATION if self.next_task(p) else WorkflowState.TESTING); continue
             if s==WorkflowState.READY_FOR_HUMAN:
