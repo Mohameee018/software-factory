@@ -47,6 +47,29 @@ class GitFlow:
             raise RuntimeError(push.stderr or push.stdout or "git push failed")
         return {"branch": branch, "pushed": True}
 
+    def existing_pull_request(self, full_name: str, head: str, base: str = "main"):
+        if not self.enabled:
+            return None
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{full_name}/pulls?state=open&head={head}&base={base}",
+            method="GET",
+            headers={"Authorization": f"Bearer {self.token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "software-factory"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                rows=json.loads(response.read().decode())
+        except urllib.error.HTTPError as exc:
+            detail=exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"GitHub PR lookup API {exc.code}: {detail[:1000]}") from exc
+        return rows[0] if rows else None
+
+    def create_or_get_pull_request(self, full_name: str, head: str, base: str = "main",
+                                   title: str = "Factory change", body: str = ""):
+        existing=self.existing_pull_request(full_name, head, base)
+        if existing:
+            return {"number": existing.get("number"), "url": existing.get("html_url"), "draft": bool(existing.get("draft", True)), "head": head, "base": base, "existing": True}
+        return self.create_pull_request(full_name, head, base, title, body)
+
     def create_pull_request(self, full_name: str, head: str, base: str = "main",
                             title: str = "Factory change", body: str = ""):
         if not self.enabled:
