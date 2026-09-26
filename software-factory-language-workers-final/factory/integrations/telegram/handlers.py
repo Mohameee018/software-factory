@@ -155,8 +155,23 @@ class TelegramHandlers:
             if msg in conversational and p.current_state not in (WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL,WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.READY_FOR_HUMAN):
                 self.service.db.event(WorkflowEvent(project_id=pid,event_type='HUMAN_CONVERSATIONAL_INPUT',details={'message':raw,'classified_as':'acknowledgment_or_inquiry'}))
                 if msg in {'اشتغل','اشتاغل','كمل','كمّل','مستمر'}:
-                    self._enqueue(pid,priority=100)
-                    await update.effective_message.reply_text('👔 <b>#MANAGER</b> تمام، كمّلنا. رجّعت المشروع للـworkflow من غير ما أعمل Fix Task جديدة.',parse_mode='HTML')
+                    job_id = self._enqueue(pid,priority=100)
+                    # Give the worker a brief chance to claim the job so the reply
+                    # reports the real live state instead of only confirming enqueue.
+                    await asyncio.sleep(1.5)
+                    live = self.service.db.get_project(pid) or p
+                    jobs = self.service.db.list_jobs(pid, 5)
+                    job = next((j for j in jobs if j[0] == job_id), None)
+                    latest = self.service.db.list_events(pid, 1)
+                    job_status = job[3] if job else 'UNKNOWN'
+                    last_event = latest[0].event_type if latest else 'NONE'
+                    await update.effective_message.reply_text(
+                        f'👔 <b>#MANAGER</b> تمام، رجّعت المشروع للـworkflow.\\n'
+                        f'📍 الحالة الآن: <b>{live.current_state.value}</b>\\n'
+                        f'⚙️ Job: <code>{job_id or "none"}</code> — <b>{job_status}</b>\\n'
+                        f'🕒 آخر حدث: <b>{last_event}</b>\\n'
+                        f'📌 لو الحالة WAITING_FOR_QUOTA/BLOCKED فالمصنع استلم الأمر لكن العائق هو اللي موقف التنفيذ.',
+                        parse_mode='HTML')
                 else:
                     await update.effective_message.reply_text('👔 <b>#MANAGER</b> تمام، فهمت. مفيش Fix Task هتتعمل لمجرد الرسالة دي.',parse_mode='HTML')
                 return
