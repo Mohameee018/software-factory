@@ -23,7 +23,7 @@ class TelegramNotifier:
                 urllib.request.urlopen(req,timeout=20).read()
             except Exception: pass
     def state_changed(self, project, state):
-        important={'DESIGNING':'🎨 #UIUX بدأ تصميم المشروع','DESIGN_APPROVED':'✅ التصميم اتوافق عليه — الفريق يستعد للتنفيذ','PLANNING':'🧠 Planning started','DOCUMENTATION':'📋 Requirements generated','ANALYSIS':'🔍 Requirements analysis started','TASK_CREATION':'📋 Task creation started','IMPLEMENTATION':'💻 Implementation started','TESTING':'🧪 Tests running','REVIEWING':'🔍 Code review started','UX_REVIEW':'🎨 UI/UX implementation review started','SECURITY_REVIEW':'🛡️ Security review started','FIXING':'🔧 Fix loop started','READY_FOR_HUMAN':'✅ Project ready for human review','BLOCKED':'⛔ Project blocked','FAILED':'❌ Project failed','CANCELLED':'🛑 Project cancelled'}
+        important={'DESIGNING':'🎨 #UIUX بدأ تصميم المشروع','DESIGN_APPROVED':'✅ التصميم اتوافق عليه — الفريق يستعد للتنفيذ','PLANNING':'🧠 Planning started','DOCUMENTATION':'📋 Requirements generated','ANALYSIS':'🔍 Requirements analysis started','TASK_CREATION':'📋 Task creation started','IMPLEMENTATION':'💻 Implementation started','TESTING':'🧪 Tests running','REVIEWING':'🔍 Code review started','UX_REVIEW':'🎨 UI/UX implementation review started','SECURITY_REVIEW':'🛡️ Security review started','FIXING':'🔧 Fix loop started','READY_FOR_HUMAN':'✅ Project ready for human review','WAITING_FOR_QUOTA':'⏸️ Project waiting for AI quota recovery','BLOCKED':'⛔ Project blocked','FAILED':'❌ Project failed','CANCELLED':'🛑 Project cancelled'}
         if state in important:self._send(f'{important[state]}\n\n{project_status(project)}')
     def agent_started(self, project, agent_name, action='بدأ العمل'):
         tag = tag_for(agent_name)
@@ -63,8 +63,10 @@ class TelegramNotifier:
     def agent_result(self, project, result):
         tag = tag_for(getattr(result, 'agent_name', ''))
         summary = getattr(result, 'summary', '') or ('completed' if getattr(result, 'success', False) else 'reported a problem')
+        data = result.detailed_output if isinstance(result.detailed_output,dict) else {}
+        model = data.get('model_used')
         icon = '✅' if getattr(result, 'success', False) else '⚠️'
-        self._send(f'{icon} <b>{tag}</b> {summary}\\n\\n{project_status(project)}')
+        self._send(f'{icon} <b>{tag}</b> {summary}' + (f'\\n🤖 Model: <code>{model}</code>' if model else '') + f'\\n\\n{project_status(project)}')
 
     def ready_summary(self, project, tasks):
         self._send(f'✅ <b>PROJECT READY FOR HUMAN REVIEW</b>\n\n{project_status(project)}\n\nTasks: {len(tasks)}')
