@@ -6,6 +6,7 @@ from factory.storage import build_database
 from factory.logging_config import configure_logging
 from factory.models import ProjectType,WorkflowState
 from factory.orchestrator import Orchestrator
+from factory.service_lock import singleton_service_lock
 from factory.approvals import ApprovalService
 app=typer.Typer(help='Multi-Agent Autonomous Software Factory')
 def svc():
@@ -135,14 +136,17 @@ def telegram():
  from factory.integrations.telegram.bot import TelegramBot
  from factory.integrations.telegram.service import TelegramService
  from factory.server import build_worker
- s=get_settings(); s.ensure_directories(); db=build_database(s); service=TelegramService(db,s); _,_,worker=build_worker()
  from factory.supervisor import FactorySupervisor
- supervisor=FactorySupervisor(service,worker)
- worker_thread=threading.Thread(target=worker.run_forever,name='factory-worker',daemon=True); worker_thread.start()
- supervisor.start()
- try: TelegramBot(service,s).run()
- finally:
-  supervisor.stop(); worker.stop(); worker_thread.join(timeout=10)
+ s=get_settings(); s.ensure_directories(); db=build_database(s); service=TelegramService(db,s)
+ with singleton_service_lock(db, 'telegram-polling'):
+  _,_,worker=build_worker()
+  supervisor=FactorySupervisor(service,worker)
+  worker_thread=threading.Thread(target=worker.run_forever,name='factory-worker',daemon=True); worker_thread.start()
+  supervisor.start()
+  try: TelegramBot(service,s).run()
+  finally:
+   supervisor.stop(); worker.stop(); worker_thread.join(timeout=10)
+
 @app.command('dashboard')
 def dashboard():
  from factory.dashboard import run_dashboard
