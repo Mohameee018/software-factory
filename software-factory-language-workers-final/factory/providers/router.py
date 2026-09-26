@@ -124,12 +124,12 @@ class ModelRouter:
                     specs.append({'provider':provider,'model':model,'label':label})
         if raw:
             for item in raw.split(','): add_item(item)
+        current_provider=str(self.settings.provider).strip().lower()
         if not specs:
             specs=[self._default_spec()]
             # Keep independent Gemini-compatible buckets available, then add
             # cross-provider backups when their credentials are configured.
             base_url=str(self.settings.api_base_url).lower()
-            current_provider=str(self.settings.provider).strip().lower()
             if current_provider == 'openai-compatible' and 'generativelanguage.googleapis.com' in base_url:
                 for model_name in (
                     'gemini-3.8-flash',
@@ -141,7 +141,8 @@ class ModelRouter:
                 ):
                     add_item(f'openai-compatible:{model_name}')
         # Automatic cross-provider failover is enabled whenever the corresponding
-        # credential is present. Explicit role/global AI_MODELS remains authoritative.
+        # credential is present. Role-specific AI_MODELS is also allowed to fall back
+        # unless a global AI_MODELS list explicitly locks the pool.
         global_raw=os.getenv('AI_MODELS','').strip()
         if not global_raw:
             if os.getenv('GROQ_API_KEY'):
