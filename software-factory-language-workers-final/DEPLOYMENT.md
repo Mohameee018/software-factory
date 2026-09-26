@@ -15,6 +15,33 @@ Create `.env` from `.env.example` and set:
 
 Do not put these values into Git, Dockerfile, compose YAML, or application source.
 
+## GitHub project publishing
+
+Every new project can be published immediately to the authenticated GitHub account as a **private repository**. The factory creates the repository before the first AI stage and automatically syncs generated changes after agent runs.
+
+Set these Railway/server variables:
+
+- `GITHUB_TOKEN` — GitHub token allowed to create private repositories and push to them.
+- `GITHUB_OWNER` — optional; leave empty to use the authenticated token owner.
+- `GITHUB_ENABLED=true`
+- `GITHUB_AUTO_SYNC=true`
+
+The factory never stores the GitHub token inside a generated project. Common secret files such as `.env`, `.pem`, `.key`, `.p12`, and service-account credential files are ignored/refused during sync.
+
+Repositories remain private by default. If you decide to publish a project later, use Telegram:
+
+```
+/github-public <project_id>
+```
+
+or the CLI:
+
+```
+factory github-public <project_id>
+```
+
+This visibility change is explicit and is **not** performed automatically.
+
 ## 3. Start
 
 ```bash
