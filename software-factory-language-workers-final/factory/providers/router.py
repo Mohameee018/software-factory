@@ -74,6 +74,8 @@ class ModelRouter:
                 if low.startswith('gpt-'): provider='openai'
                 elif low.startswith('gemini-'): provider='gemini'
                 elif low.startswith('claude-'): provider='anthropic'
+                elif low.startswith('gpt-5-codex') or low.startswith('gpt-5.1-codex') or low.startswith('gpt-5.2-codex'): provider='codex'
+                elif low.startswith('gpt-oss-') or low.startswith('openai/gpt-oss-'): provider='groq'
                 else: provider=str(self.settings.provider).strip().lower()
             if provider and model:
                 label=f'{provider}:{model}'
@@ -95,7 +97,7 @@ class ModelRouter:
 
     def is_quota_error(self, exc):
         text=str(exc).upper()
-        return any(x in text for x in ('RESOURCE_EXHAUSTED','QUOTA EXCEEDED','FREE_TIER_REQUESTS','GENERATE_CONTENT_FREE_TIER_REQUESTS','DAILY QUOTA','RPD'))
+        return any(x in text for x in ('RESOURCE_EXHAUSTED','QUOTA EXCEEDED','FREE_TIER_REQUESTS','GENERATE_CONTENT_FREE_TIER_REQUESTS','DAILY QUOTA','RPD','RATE LIMIT','TOO MANY REQUESTS','429'))
 
     def next_quota_time(self):
         tz=ZoneInfo(os.getenv('FACTORY_QUOTA_TIMEZONE','Africa/Cairo'))
