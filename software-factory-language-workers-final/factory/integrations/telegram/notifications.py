@@ -4,10 +4,17 @@ import json, urllib.request
 from .formatter import project_status, approval_text
 from .keyboards import approval_keyboard
 from factory.roles import tag_for
+from factory.project_manager import ProjectManager
 
 class TelegramNotifier:
     """Synchronous notifier safe to call from the orchestrator worker thread."""
     def __init__(self, settings, db=None): self.settings=settings; self.db=db
+    def _project_suffix(self, project):
+        try:
+            return "\n\n" + ProjectManager.progress_map(project)
+        except Exception:
+            return ""
+
     def _send(self, text, reply_markup=None):
         token=self.settings.telegram_bot_token
         if not token:return
@@ -27,7 +34,7 @@ class TelegramNotifier:
         if state in important:self._send(f'{important[state]}\n\n{project_status(project)}')
     def agent_started(self, project, agent_name, action='بدأ العمل'):
         tag = tag_for(agent_name)
-        self._send(f'🔄 <b>{tag}</b> {action}.')
+        self._send(f'🔄 <b>{tag}</b> {action}.' + self._project_suffix(project))
 
     def approval_requested(self, approval):
         self._send(approval_text(approval),{'inline_keyboard':[[{'text':'✅ APPROVE','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT','callback_data':f'apr:r:{approval.id}'}]]})
@@ -79,7 +86,7 @@ class TelegramNotifier:
         data = result.detailed_output if isinstance(result.detailed_output,dict) else {}
         model = data.get('model_used')
         icon = '✅' if getattr(result, 'success', False) else '⚠️'
-        self._send(f'{icon} <b>{tag}</b> {summary}' + (f'\\n🤖 Model: <code>{model}</code>' if model else '') + f'\\n\\n{project_status(project)}')
+        self._send(f'{icon} <b>{tag}</b> {summary}' + (f'\\n🤖 Model: <code>{model}</code>' if model else '') + f'\\n\\n{project_status(project)}' + self._project_suffix(project))
 
     def ready_summary(self, project, tasks):
         self._send(f'✅ <b>PROJECT READY FOR HUMAN REVIEW</b>\n\n{project_status(project)}\n\nTasks: {len(tasks)}')
@@ -102,7 +109,7 @@ class TelegramNotifier:
                 self.send_document(project, rel)
                 sent += 1
         if sent:
-            self._send('📦 <b>#MANAGER</b> بعتلك حزمة المتطلبات كاملة: PRD + Requirements + Acceptance Criteria.')
+            self._send('📦 <b>#MANAGER</b> بعتلك حزمة المتطلبات كاملة: PRD + Requirements + Acceptance Criteria.' + self._project_suffix(project))
 
     def _send_document(self, project, relative_path):
         token=self.settings.telegram_bot_token
