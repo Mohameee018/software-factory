@@ -18,6 +18,8 @@ from factory.providers.registry import build_provider
 from factory.providers.mock import MockProvider
 from factory.providers.router import ModelRouter
 from factory.gates import verify
+from factory.company_os import get_contract, select_team
+from factory.traceability import write_report
 
 @dataclass
 class Context:
@@ -431,10 +433,30 @@ class Orchestrator:
                 if self._pause_for_quota(p,r,state): continue
                 if r.success:
                     state.retry_counts.pop('analyzer_provider', None)
+                    state.retry_counts.pop('analysis_correction', None)
                     self.db.save_state(state)
                     self.set_state(p,WorkflowState.ARCHITECTURE)
                 else:
-                    errors = r.errors[-3:] or ['Analysis failed.']
+                    cycle=state.retry_counts.get('analysis_correction',0)
+                    findings=(r.detailed_output or {}) if isinstance(r.detailed_output,dict) else {}
+                    blocking_items=[]
+                    for key in ('contradictions','missing_requirements','missing_acceptance_criteria','dependency_issues','technical_risks','security_risks'):
+                        vals=findings.get(key,[]) or []
+                        blocking_items.extend(vals if isinstance(vals,list) else [vals])
+                    if blocking_items and cycle < 3:
+                        state.retry_counts['analysis_correction']=cycle+1
+                        state.error_history.extend([f'Analyzer correction cycle {cycle+1}: {x}' for x in blocking_items[:10]])
+                        self.db.save_state(state)
+                        if self.notifier:
+                            try:self.notifier._send(f'🔧 <b>#ANALYZER</b> لقى {len(blocking_items)} ملاحظات مؤثرة. بدء corrective planning pass ({cycle+1}/3) بدل إيقاف المشروع.')
+                            except Exception:pass
+                        pr=self.agents['planner'].run(ctx); self.record(state,pr)
+                        if self._pause_for_quota(p,pr,state): continue
+                        if pr.success:
+                            continue
+                        self.set_state(p,WorkflowState.BLOCKED)
+                    else:
+                        errors = r.errors[-3:] or ['Analysis failed.']
                     state.error_history.extend(errors)
                     retry_key = 'analyzer_provider'
                     retry_count = state.retry_counts.get(retry_key, 0)
@@ -481,12 +503,37 @@ class Orchestrator:
                 continue
             if s==WorkflowState.TASK_CREATION:
                 self.ensure_tasks(p)
+                trace=write_report(p.workspace_path)
+                if not trace.complete:
+                    msg=f'Traceability incomplete: {len(trace.unmapped)} unmapped requirements.'
+                    state.error_history.append(msg)
+                    cycle=state.retry_counts.get('traceability_correction',0)
+                    if cycle < 3:
+                        state.retry_counts['traceability_correction']=cycle+1
+                        self.db.save_state(state)
+                        if self.notifier:
+                            try:self.notifier._send('🔗 <b>#TRACEABILITY</b> في requirements لسه مش مربوطة بمهام. corrective planning pass قبل التنفيذ.')
+                            except Exception:pass
+                        pr=self.agents['planner'].run(ctx); self.record(state,pr)
+                        if self._pause_for_quota(p,pr,state): continue
+                        if pr.success: continue
+                    self.db.save_state(state)
+                    self.set_state(p,WorkflowState.BLOCKED); continue
                 self.notifier.agent_started(p, 'Manager Agent', 'بيتحقق إن كل requirement متغطية وبيوزع المهام والـskills تلقائيًا') if self.notifier else None
                 mr=self.agents['manager'].run(ctx); self.record(state,mr)
                 if self._pause_for_quota(p,mr,state): continue
                 if mr.success:
                     assignments=(mr.detailed_output or {}).get('assignments',[]) if isinstance(mr.detailed_output,dict) else []
                     tasks=self.db.list_tasks(p.id)
+                    req_path=Path(p.workspace_path)/'docs'/'REQUIREMENTS.md'
+                    req_text=req_path.read_text(encoding='utf-8',errors='ignore') if req_path.exists() else p.description
+                    team=select_team(req_text,p.project_type.value)
+                    contract_path=Path(p.workspace_path)/'docs'/'TEAM.md'
+                    contract_path.write_text('# Dynamic Project Team\n\n'+'\n'.join(
+                        f'- #{role.upper()} — {get_contract(role).title}: {get_contract(role).mission}' for role in team
+                    )+'\n',encoding='utf-8')
+                    state.stage_evidence['TASK_CREATION']=['docs/TASKS.md','docs/TRACEABILITY.md','docs/TEAM.md','docs/MANAGER_PLAN.md']
+                    self.db.save_state(state)
                     for a in assignments:
                         try:
                             n=int(a.get('task_number',0))
