@@ -66,6 +66,7 @@ class TelegramHandlers:
                 if approvals:
                     ApprovalService(self.service.db).resolve(approvals[-1],True,'Human approved via Telegram')
                     if action=='requirements_approval':
+                        self.service.set_state(p,WorkflowState.DESIGNING)
                         await update.effective_message.reply_text('✅ المتطلبات اتوافقت. الـManager هيبدأ يراجعها ويجهز خطة المشروع.')
                     else:
                         await update.effective_message.reply_text('✅ تمت الموافقة. المصنع بيكمل.')
@@ -187,6 +188,7 @@ class TelegramHandlers:
         p = self.service.db.get_project(a.project_id)
         if p and a.requested_action == 'requirements_approval':
             if approved:
+                self.service.set_state(p, WorkflowState.DESIGNING)
                 self._enqueue(a.project_id, priority=100)
             else:
                 self.service.set_state(p, WorkflowState.REQUIREMENTS_GATHERING)
