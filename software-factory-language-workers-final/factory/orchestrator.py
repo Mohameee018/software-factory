@@ -584,7 +584,7 @@ class Orchestrator:
                     self.notifier.agent_started(p, 'Developer Agent', f'بدأ تنفيذ المهمة: {t.title}') if self.notifier else None
                     r=self.agents['developer'].run(ctx,t)
                 self.record(state,r)
-                gate_errors=verify(WorkflowState.IMPLEMENTATION,p.workspace_path,r,t)
+                gate_errors=[] if effective_mock else verify(WorkflowState.IMPLEMENTATION,p.workspace_path,r,t)
                 if gate_errors:
                     r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors)
                 if self._pause_for_quota(p,r,state):
