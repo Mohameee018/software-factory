@@ -14,7 +14,7 @@ class TelegramBot:
         self.application.add_handler(CommandHandler('start',self._guard(h.start)))
         self.application.add_handler(CommandHandler('help',self._guard(h.help)))
         self.application.add_handler(CommandHandler('new',self._guard(h.new)))
-        for cmd,fn in [('projects',h.projects),('project',h.project),('status',h.status),('tasks',h.tasks),('run',h.run),('pause',h.pause),('resume',h.resume),('cancel',h.cancel),('retry',h.retry),('logs',h.logs),('approve',h.approve),('reject',h.reject),('review',h.review),('feedback',h.feedback),('github_public',h.github_public)]:
+        for cmd,fn in [('projects',h.projects),('project',h.project),('status',h.status),('manager',h.manager),('requirements',h.requirements),('tasks',h.tasks),('run',h.run),('pause',h.pause),('resume',h.resume),('cancel',h.cancel),('retry',h.retry),('logs',h.logs),('approve',h.approve),('reject',h.reject),('review',h.review),('feedback',h.feedback),('github_public',h.github_public)]:
             self.application.add_handler(CommandHandler(cmd,self._guard(fn)))
         self.application.add_handler(CallbackQueryHandler(h.callback,pattern=r'^apr:[ar]:'))
         photo_filter = getattr(filters, 'PHOTO', None)
