@@ -10,6 +10,13 @@ from factory.config import get_settings
 from factory.storage import build_database
 
 
+def _workers(db):
+    rows=[]
+    for worker_type in ('generic','python','node','java','flutter'):
+        hb=db.get_heartbeat(f'worker:{worker_type}')
+        rows.append({'type':worker_type,'heartbeat':hb[0] if hb else None,'details':json.loads(hb[1]) if hb else None})
+    return rows
+
 def snapshot(db):
     rows = []
     for p in db.list_projects():
@@ -25,7 +32,7 @@ def snapshot(db):
             },
             "updated_at": p.updated_at.isoformat(),
         })
-    return {"projects": rows, "queue_pending": db.queue_count()}
+    return {"projects": rows, "queue_pending": db.queue_count(), "workers": _workers(db)}
 
 
 class Handler(BaseHTTPRequestHandler):
