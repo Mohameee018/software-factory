@@ -12,7 +12,9 @@ class AnalyzerAgent(Agent):
         for p in d.glob('*.md'):
             parts.append(f'### {p.name}\n{redact_secrets(p.read_text(encoding="utf-8",errors="ignore")[:20000])}')
         try: data=self.provider.generate_json(self.instructions,'\n\n'.join(parts),SCHEMA,timeout=context.timeout)
-        except Exception as e:return AgentResult(success=False,agent_name=self.name,summary='Analysis failed.',errors=[str(e)],next_action='fix')
+        except Exception as e:
+            detail=str(e).strip() or f'{type(e).__name__}: analysis provider failed'
+            return AgentResult(success=False,agent_name=self.name,summary=f'Analysis failed: {detail[:700]}',errors=[detail],next_action='fix')
         if getattr(self.provider,'is_mock',False):
             data={'contradictions':[],'missing_requirements':[],'ambiguities':[],'missing_acceptance_criteria':[],'technical_risks':[],'security_risks':[],'dependency_issues':[],'blocking':False,'summary':'Mock analysis passed.'}
         (d/'ANALYSIS.md').write_text('# Analysis\n\n'+str(data),encoding='utf-8')
