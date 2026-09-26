@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 from factory.agents.base import Agent
 from factory.models import AgentResult
+from factory.intake import extract_text
 
 SCHEMA={
   "type":"object",
@@ -58,8 +59,16 @@ The client may have specified Flutter, Android, iOS, Web, Windows, macOS or othe
 preserve explicit platform requirements and identify platform-specific behavior when known.
 Do not turn this into a numbered questionnaire.
 """
+        images=[]
+        for ext in ('*.png','*.jpg','*.jpeg','*.webp'):
+            for p in d.rglob(ext):
+                try:
+                    import base64
+                    mime='image/png' if p.suffix.lower()=='.png' else 'image/jpeg'
+                    images.append({'mime_type':mime,'data':base64.b64encode(p.read_bytes()).decode('ascii')})
+                except OSError: pass
         try:
-            data=self.provider.generate_json(self.instructions,prompt,SCHEMA,timeout=context.timeout)
+            data=self.provider.generate_json(self.instructions,prompt,SCHEMA,timeout=context.timeout,images=images or None)
         except Exception as e:
             return AgentResult(success=False,agent_name=self.name,summary="Requirements discovery failed.",errors=[str(e)],next_action="retry")
         if getattr(self.provider,"is_mock",False):
