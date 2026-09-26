@@ -1,14 +1,14 @@
 from __future__ import annotations
 import typer
 from factory.config import get_settings
-from factory.database import Database
+from factory.storage import build_database
 from factory.logging_config import configure_logging
 from factory.models import ProjectType,WorkflowState,Priority
 from factory.orchestrator import Orchestrator
 from factory.approvals import ApprovalService
 app=typer.Typer(help='Multi-Agent Autonomous Software Factory')
 def svc():
- s=get_settings();s.ensure_directories();return Orchestrator(Database(s.db_path),s)
+ s=get_settings();s.ensure_directories();return Orchestrator(build_database(s),s)
 @app.callback()
 def root():configure_logging(get_settings().log_level)
 @app.command('create-project')
@@ -138,7 +138,7 @@ def telegram():
  from factory.integrations.telegram.bot import TelegramBot
  from factory.integrations.telegram.service import TelegramService
  from factory.server import build_worker
- s=get_settings(); s.ensure_directories(); db=Database(s.db_path)
+ s=get_settings(); s.ensure_directories(); db=build_database(s)
  service=TelegramService(db,s)
  _,_,worker=build_worker()
  worker_thread=threading.Thread(target=worker.run_forever,name='factory-worker',daemon=True)
