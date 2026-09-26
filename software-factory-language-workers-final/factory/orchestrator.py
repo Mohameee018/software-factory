@@ -485,6 +485,19 @@ class Orchestrator:
                 mr=self.agents['manager'].run(ctx); self.record(state,mr)
                 if self._pause_for_quota(p,mr,state): continue
                 if mr.success:
+                    assignments=(mr.detailed_output or {}).get('assignments',[]) if isinstance(mr.detailed_output,dict) else []
+                    tasks=self.db.list_tasks(p.id)
+                    for a in assignments:
+                        try:
+                            n=int(a.get('task_number',0))
+                            if 1 <= n <= len(tasks):
+                                t=tasks[n-1]
+                                t.assigned_agent=str(a.get('role') or t.assigned_agent or 'developer').lower()
+                                t.skills=list(a.get('skills') or [])
+                                self.db.save_task(t)
+                                self.db.event(WorkflowEvent(project_id=p.id,event_type='TASK_ASSIGNED',task_id=t.id,details={'role':t.assigned_agent,'skills':t.skills}))
+                        except Exception:
+                            pass
                     self.set_state(p,WorkflowState.IMPLEMENTATION)
                 else:
                     errs=mr.errors[-8:] or ['Manager rejected the task plan.']
