@@ -1,6 +1,6 @@
 # Multi-Agent Autonomous Software Factory — Private Telegram Cloud
 
-A human-supervised software factory that runs on a persistent server instead of the user's PC. Telegram is the control plane; a persistent SQLite-backed queue feeds a background worker; the existing orchestrator, agents, WorkspaceFS, approvals, Git flow and recovery remain the execution core.
+A human-supervised software factory that runs on a persistent server instead of the user's PC. Telegram is the control plane; a persistent SQLite/PostgreSQL-backed queue feeds a background worker; the existing orchestrator, agents, WorkspaceFS, approvals, Git flow and recovery remain the execution core.
 
 ## Production architecture
 
@@ -11,7 +11,7 @@ Private Telegram Bot (allowlist)
    ↓
 Command/Service layer
    ↓
-Persistent SQLite Job Queue
+Persistent SQL Job Queue (SQLite/PostgreSQL)
    ↓
 Background Worker (restart policy)
    ↓
@@ -72,6 +72,8 @@ TELEGRAM_BOT_TOKEN=...
 TELEGRAM_ALLOWED_USER_IDS=123456789
 
 DATABASE_PATH=/data/factory.db
+# Optional production backend; when set to postgresql:// or postgres://, it overrides SQLite persistence.
+DATABASE_URL=postgresql://user:password@host:5432/software_factory
 WORKSPACE_PATH=/data/projects
 JOB_MAX_RETRIES=5
 ```
@@ -162,7 +164,7 @@ The following are persisted in SQLite:
 - jobs and retry state
 - service heartbeats
 
-SQLite is appropriate for a single-server/single-writer deployment. The business layer accesses persistence through `Database`; a future PostgreSQL implementation can replace that layer without changing the orchestrator/agents/Telegram contracts. The current build does **not** claim PostgreSQL support.
+SQLite remains the default local backend. PostgreSQL is now supported through the same `Database` contract: set `DATABASE_URL=postgresql://...` and the factory selects the PostgreSQL backend automatically. The orchestrator, agents, queue and Telegram contracts remain unchanged. PostgreSQL is the preferred backend when multiple workers/services share one database.
 
 ## Security
 
@@ -278,3 +280,39 @@ AI_MODELS_DEVELOPER=groq:openai/gpt-oss-120b,openai:gpt-5.6-sol
 ```
 
 The old OpenAI Codex API model IDs (`gpt-5-codex`, `gpt-5.1-codex`, `gpt-5.2-codex`, etc.) are no longer valid live targets. If a legacy `codex:<old-id>` entry is configured, the router maps it to `gpt-5.6-sol` through the OpenAI Responses API. For new agent applications, OpenAI currently recommends the Responses API / Codex harness.
+
+
+## Budgets and quota safety
+
+The factory now enforces both AI-run and wall-clock project budgets:
+
+```env
+MAX_AGENT_RUNS=250
+MAX_PROJECT_SECONDS=0
+```
+
+Set `MAX_PROJECT_SECONDS` to a positive value to stop a project from running beyond that wall-clock budget. Budget exhaustion is persisted as a workflow event and the project enters the existing quota/waiting path instead of continuing indefinitely.
+
+## Git workflow
+
+Every generated project still starts on its own `factory/<project-id>` branch and is pushed to its own private GitHub repository immediately when GitHub publishing is enabled. The `factory.gitflow.GitFlow` helper also supports deterministic task branches and draft Pull Requests, keeping review separate from the protected default branch.
+
+## Dashboard security
+
+If `DASHBOARD_TOKEN` is configured, the dashboard and project APIs require:
+
+```
+Authorization: Bearer <DASHBOARD_TOKEN>
+```
+
+`/health` remains unauthenticated for infrastructure health checks. Without a token the dashboard keeps the existing local/open behavior.
+
+## Stress and recovery validation
+
+The suite includes concurrent queue-claim and expired-lease recovery coverage. Run:
+
+```bash
+pytest -q tests/test_stress_recovery.py
+```
+
+The test verifies that concurrent workers do not claim two jobs from the same project simultaneously and that an expired worker lease returns the job to the retry queue.
