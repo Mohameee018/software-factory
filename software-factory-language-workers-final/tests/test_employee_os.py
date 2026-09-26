@@ -24,4 +24,18 @@ def test_sync_task_file_writes_employee_inbox(tmp_path: Path):
     assert "#DEVELOPER" in text
     assert "Feature works" in text
     assert "pytest" in text
-\n\ndef test_task_evidence_is_persisted():\n    from factory.models import Task\n    task = Task(project_id="p", title="x", description="x")\n    task.evidence = ["pytest -q", "tests/test_x.py"]\n    assert task.evidence == ["pytest -q", "tests/test_x.py"]\n\n\ndef test_sync_task_file_uses_persisted_evidence(tmp_path: Path):\n    task = SimpleNamespace(id="task_456", title="Run QA", description="Run tests.", status="DONE", assigned_agent="tester", acceptance_criteria=[], tests_required=[], files_expected=[], failure_reason=None, evidence=["pytest -q", "docs/TEST_REPORT.md"])\n    path = sync_task_file(tmp_path, task)\n    text = path.read_text(encoding="utf-8")\n    assert "pytest -q" in text\n    assert "docs/TEST_REPORT.md" in text\n
+
+
+def test_task_evidence_is_persisted():
+    from factory.models import Task
+    task = Task(project_id="p", title="x", description="x")
+    task.evidence = ["pytest -q", "tests/test_x.py"]
+    assert task.evidence == ["pytest -q", "tests/test_x.py"]
+
+
+def test_sync_task_file_uses_persisted_evidence(tmp_path: Path):
+    task = SimpleNamespace(id="task_456", title="Run QA", description="Run tests.", status="DONE", assigned_agent="tester", acceptance_criteria=[], tests_required=[], files_expected=[], failure_reason=None, evidence=["pytest -q", "docs/TEST_REPORT.md"])
+    path = sync_task_file(tmp_path, task)
+    text = path.read_text(encoding="utf-8")
+    assert "pytest -q" in text
+    assert "docs/TEST_REPORT.md" in text
