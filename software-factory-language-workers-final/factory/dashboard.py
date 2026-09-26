@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
-from urllib.parse import urlparse\nimport hmac
+from urllib.parse import urlparse\nimport hmac\nfrom html import escape
 from factory.config import get_settings
 from factory.database import Database
 def snapshot(db):
@@ -25,7 +25,7 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self,data):
         raw=json.dumps(data,ensure_ascii=False,default=str).encode(); self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw)
     def _html(self,data):
-        cards=''.join(f"<tr><td>{p['name']}</td><td>{p['state']}</td><td>{p['tasks']['done']}/{p['tasks']['total']}</td><td>{p['type']}</td></tr>" for p in data['projects'])
+        cards=''.join(f"<tr><td>{escape(str(p['name']))}</td><td>{escape(str(p['state']))}</td><td>{p['tasks']['done']}/{p['tasks']['total']}</td><td>{escape(str(p['type']))}</td></tr>" for p in data['projects'])
         raw=f"""<!doctype html><meta charset='utf-8'><title>Software Factory</title><style>body{{font-family:system-ui;margin:32px}}table{{border-collapse:collapse;width:100%}}td,th{{padding:10px;border-bottom:1px solid #ddd}}</style><h1>Software Factory</h1><p>Queued jobs: {data['queue_pending']}</p><table><tr><th>Project</th><th>State</th><th>Tasks</th><th>Type</th></tr>{cards}</table>"""
         b=raw.encode(); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
 def run_dashboard(host='0.0.0.0',port=8080): ThreadingHTTPServer((host,int(port)),Handler).serve_forever()
