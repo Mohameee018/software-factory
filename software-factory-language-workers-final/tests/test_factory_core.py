@@ -341,3 +341,19 @@ def test_manual_retry_rejected_dependency_creates_fresh_approval(tmp_path):
     approvals=o.db.list_approvals(p.id)
     assert state.current_state == WorkflowState.BLOCKED
     assert len(approvals) == 2 and approvals[0].status == __import__('factory.models',fromlist=['ApprovalStatus']).ApprovalStatus.PENDING
+
+
+def test_dynamic_role_registry_is_safe():
+    from factory.company_os import EmployeeContract, register_role, unregister_role, get_contract, list_roles
+    role='custom_test_role'
+    register_role(EmployeeContract(role,'Custom','Test mission',(),(),(),()))
+    assert role in list_roles()
+    assert get_contract(role).title == 'Custom'
+    unregister_role(role)
+    assert role not in list_roles()
+    try:
+        unregister_role('developer')
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('built-in roles must not be removable')
