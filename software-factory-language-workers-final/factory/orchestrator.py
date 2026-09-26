@@ -626,6 +626,9 @@ class Orchestrator:
             data=dict(data); data['model_used']=router.last_model; data['models_attempted']=list(router.last_attempts)
             r.detailed_output=data
         self.db.agent_result(state.project_id,r); state.agent_results.append(r.agent_name)
+        if r.completion_evidence:
+            state.generated_artifacts.extend(x for x in r.completion_evidence if x not in state.generated_artifacts)
+            state.stage_evidence[r.agent_name]=list(r.completion_evidence)
         if self.notifier:
             try: self.notifier.agent_result(self.db.get_project(state.project_id), r)
             except Exception: pass
