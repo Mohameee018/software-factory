@@ -8,7 +8,8 @@ TRANSITIONS={
  WorkflowState.DESIGN_APPROVED:{WorkflowState.PLANNING,WorkflowState.BLOCKED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.PLANNING:{WorkflowState.DOCUMENTATION,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.DOCUMENTATION:{WorkflowState.ANALYSIS,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
- WorkflowState.ANALYSIS:{WorkflowState.TASK_CREATION,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
+ WorkflowState.ANALYSIS:{WorkflowState.ARCHITECTURE,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
+ WorkflowState.ARCHITECTURE:{WorkflowState.TASK_CREATION,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.TASK_CREATION:{WorkflowState.IMPLEMENTATION,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.IMPLEMENTATION:{WorkflowState.TESTING,WorkflowState.FIXING,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.TESTING:{WorkflowState.REVIEWING,WorkflowState.FIXING,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
@@ -20,7 +21,7 @@ TRANSITIONS={
  WorkflowState.CHANGES_REQUESTED:{WorkflowState.TASK_CREATION,WorkflowState.BLOCKED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.BLOCKED:{WorkflowState.PLANNING,WorkflowState.TASK_CREATION,WorkflowState.IMPLEMENTATION,WorkflowState.FIXING,WorkflowState.CANCELLED,WorkflowState.PAUSED},
  WorkflowState.FAILED:{WorkflowState.PLANNING,WorkflowState.CANCELLED,WorkflowState.PAUSED},
- WorkflowState.PAUSED:{WorkflowState.IDEA,WorkflowState.DESIGNING,WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.DESIGN_APPROVED,WorkflowState.PLANNING,WorkflowState.DOCUMENTATION,WorkflowState.ANALYSIS,WorkflowState.TASK_CREATION,WorkflowState.IMPLEMENTATION,WorkflowState.TESTING,WorkflowState.REVIEWING,WorkflowState.SECURITY_REVIEW,WorkflowState.FIXING,WorkflowState.READY_FOR_HUMAN,WorkflowState.BLOCKED,WorkflowState.CANCELLED},
+ WorkflowState.PAUSED:{WorkflowState.IDEA,WorkflowState.DESIGNING,WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.DESIGN_APPROVED,WorkflowState.PLANNING,WorkflowState.DOCUMENTATION,WorkflowState.ANALYSIS,WorkflowState.ARCHITECTURE,WorkflowState.TASK_CREATION,WorkflowState.IMPLEMENTATION,WorkflowState.TESTING,WorkflowState.REVIEWING,WorkflowState.SECURITY_REVIEW,WorkflowState.FIXING,WorkflowState.READY_FOR_HUMAN,WorkflowState.BLOCKED,WorkflowState.CANCELLED},
  WorkflowState.WAITING_FOR_QUOTA:{WorkflowState.IDEA,WorkflowState.DESIGNING,WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.DESIGN_APPROVED,WorkflowState.PLANNING,WorkflowState.DOCUMENTATION,WorkflowState.ANALYSIS,WorkflowState.TASK_CREATION,WorkflowState.IMPLEMENTATION,WorkflowState.TESTING,WorkflowState.REVIEWING,WorkflowState.UX_REVIEW,WorkflowState.SECURITY_REVIEW,WorkflowState.FIXING,WorkflowState.READY_FOR_HUMAN,WorkflowState.BLOCKED,WorkflowState.CANCELLED},
  WorkflowState.COMPLETED:set(), WorkflowState.CANCELLED:set()
 }
