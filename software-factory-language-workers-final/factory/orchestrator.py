@@ -361,6 +361,39 @@ class Orchestrator:
         if state and state.error_history: parts.append('RECENT ERRORS:\n'+'\n'.join(state.error_history[-5:]))
         return '\n\n'.join(parts)
 
+    def _run_employee_task(self, ctx, task):
+        """Execute a task with its assigned employee role; never silently fall back to developer."""
+        role = role_for_task(task.title, task.assigned_agent)
+        task.assigned_agent = role
+        self.db.save_task(task)
+        role_agents = {
+            'developer': 'developer', 'tester': 'tester', 'qa': 'tester',
+            'reviewer': 'reviewer', 'security': 'security', 'release': 'release',
+            'planner': 'planner', 'manager': 'manager', 'analyzer': 'analyzer',
+            'architect': 'architect', 'uiux': 'uiux', 'auditor': 'auditor',
+        }
+        agent_key = role_agents.get(role)
+        if not agent_key:
+            return AgentResult(success=False, agent_name=f'{role.title()} Employee', task_id=task.id,
+                               summary=f'No executable employee is registered for role: {role}.',
+                               errors=[f'UNSUPPORTED_EMPLOYEE_ROLE:{role}'], next_action='blocked')
+        agent = self.agents[agent_key]
+        try:
+            return agent.run(ctx, task)
+        except TypeError:
+            # Legacy agents may not accept a task parameter; they still execute their
+            # own role and are never replaced by the developer.
+            return agent.run(ctx)
+
+    @staticmethod
+    def _task_evidence(result):
+        evidence = list(result.completion_evidence or [])
+        evidence.extend(result.tests_run or [])
+        evidence.extend(result.commands_executed or [])
+        evidence.extend(result.files_created or [])
+        evidence.extend(result.files_modified or [])
+        return list(dict.fromkeys(str(x) for x in evidence if str(x).strip()))
+
     def run(self,pid,dry_run=False,mock=False):
         p=self.db.get_project(pid)
         if not p: raise ValueError('Project not found')
@@ -656,22 +689,27 @@ class Orchestrator:
                 if effective_mock:
                     r=AgentResult(success=True,agent_name='Developer Agent',task_id=t.id,summary='Mock implementation.',next_action='test')
                 else:
-                    self.notifier.agent_started(p, 'Developer Agent', f'بدأ تنفيذ المهمة: {t.title}') if self.notifier else None
-                    r=self.agents['developer'].run(ctx,t)
+                    self.notifier.agent_started(p, f'{t.assigned_agent.title()} Employee', f'بدأ تنفيذ المهمة: {t.title}') if self.notifier else None
+                    r=self._run_employee_task(ctx,t)
                 self.record(state,r)
                 gate_errors=[] if effective_mock else verify(WorkflowState.IMPLEMENTATION,p.workspace_path,r,t)
                 if gate_errors:
                     r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors)
                 if self._pause_for_quota(p,r,state):
                     t.status=TaskStatus.PENDING; self.db.save_task(t); continue
+                evidence = self._task_evidence(r)
+                if r.success and not effective_mock and not evidence:
+                    r.success=False
+                    r.errors.append('TASK_COMPLETION_EVIDENCE_REQUIRED')
                 if r.success:
-                    t.status=TaskStatus.DONE; t.completed_at=datetime.now(timezone.utc); t.failure_reason=None
+                    t.status=TaskStatus.DONE; t.completed_at=datetime.now(timezone.utc); t.failure_reason=None; t.evidence=evidence
                 else:
-                    t.retry_count+=1; t.status=TaskStatus.PENDING if t.retry_count < self.settings.max_retries else TaskStatus.FAILED; t.failure_reason='\n'.join(r.errors)
+                    t.retry_count+=1; t.status=TaskStatus.PENDING if t.retry_count < self.settings.max_retries else TaskStatus.FAILED; t.failure_reason='\n'.join(r.errors); t.evidence=evidence
                     state.error_history.extend(r.errors[-5:])
                 self.db.save_task(t)
+                self.db.event(WorkflowEvent(project_id=p.id,event_type='TASK_EVIDENCE_RECORDED',task_id=t.id,details={'evidence':evidence,'employee_role':t.assigned_agent,'success':r.success}))
                 try:
-                    sync_task_file(p.workspace_path, t, evidence=list(r.completion_evidence or r.tests_run or []))
+                    sync_task_file(p.workspace_path, t, evidence=evidence)
                 except Exception:
                     pass
                 if r.success:

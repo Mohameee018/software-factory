@@ -59,7 +59,8 @@ def sync_task_file(project_workspace: str | Path, task, status: str | None = Non
     expected = getattr(task, "files_expected", []) or []
     if expected: lines += ["", "## Expected files", *[f"- `{x}`" for x in expected]]
     if getattr(task, "failure_reason", None): lines += ["", "## Previous failure", task.failure_reason]
-    if evidence: lines += ["", "## Evidence", *[f"- {x}" for x in evidence]]
+    recorded = evidence if evidence is not None else (getattr(task, "evidence", None) or [])
+    if recorded: lines += ["", "## Evidence", *[f"- {x}" for x in recorded]]
     out = path / _safe_task_name(task.id, task.title)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out
