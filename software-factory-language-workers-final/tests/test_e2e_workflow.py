@@ -151,10 +151,6 @@ def test_clothes_store_end_to_end_with_fake_dependencies(tmp_path, monkeypatch):
     # Simulate Flutter project creation because this test isolates the orchestration contract, not the SDK.
     (Path(p.workspace_path)/'pubspec.yaml').write_text('name: clothes_store\n')
     state=o.run(p.id)
-    from factory.approvals import ApprovalService
-    req=[a for a in o.db.list_approvals(p.id) if a.requested_action=='requirements_approval'][-1]
-    ApprovalService(o.db).resolve(req, True, 'test requirements')
-    state=o.run(p.id)
     assert state.current_state == WorkflowState.WAITING_FOR_DESIGN_APPROVAL
     approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
     ApprovalService(o.db).resolve(approval, True, 'test')
