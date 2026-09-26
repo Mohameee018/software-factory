@@ -36,7 +36,15 @@ class TelegramNotifier:
         self._send(f"🎨 <b>UI/UX DESIGN READY</b>\n\n{project_status(project)}\n\n<b>Summary:</b> {data.get('design_summary','')}\n<b>Screens:</b> {', '.join(data.get('screens',[]))}\n\nPreview: <code>docs/design/preview.html</code>\n\nهتوصلك صورة الـ UI/UX دلوقتي.\n\nاضغط APPROVE أو اكتب «تمام». ", {'inline_keyboard':[[{'text':'✅ APPROVE DESIGN','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT DESIGN','callback_data':f'apr:r:{approval.id}'}]]})
         preview = data.get('design_preview_image')
         if preview:
-            self._send_photo(project, preview)
+            self.send_photo(project, preview)
+        else:
+            for candidate in ('docs/design/preview.png','docs/design/preview.jpg','docs/design/preview.jpeg','docs/design/preview.webp'):
+                if (Path(project.workspace_path) / candidate).is_file():
+                    self.send_photo(project, candidate)
+                    break
+
+    def send_photo(self, project, relative_path):
+        self._send_photo(project, relative_path)
 
     def _send_photo(self, project, relative_path):
         token=self.settings.telegram_bot_token
@@ -78,6 +86,18 @@ class TelegramNotifier:
         self._send("📦 <b>#RELEASE</b> Release package created\n\n" + project_status(project) + "\n\nPackage: <code>" + str(package or 'release/') + "</code>")
         if package:
             self._send_document(project, package)
+
+    def send_document(self, project, relative_path):
+        self._send_document(project, relative_path)
+
+    def send_requirements_package(self, project):
+        sent=0
+        for rel in ('docs/PRD.md','docs/REQUIREMENTS.md','docs/ACCEPTANCE_CRITERIA.md'):
+            if (Path(project.workspace_path) / rel).is_file():
+                self.send_document(project, rel)
+                sent += 1
+        if sent:
+            self._send('📦 <b>#MANAGER</b> بعتلك حزمة المتطلبات كاملة: PRD + Requirements + Acceptance Criteria.')
 
     def _send_document(self, project, relative_path):
         token=self.settings.telegram_bot_token
