@@ -117,6 +117,7 @@ class TelegramHandlers:
             await update.effective_message.reply_text('⚠️ '+(r.summary or 'محتاج أعيد محاولة جمع المتطلبات.'))
 
     async def document(self, update, context):
+        context.user_data.pop('awaiting_project',None)
         doc=update.effective_message.document
         pid=context.user_data.get('active_project_id') or self.service.db.get_active_project(update.effective_user.id)
         if pid and self.service.db.get_project(pid):
