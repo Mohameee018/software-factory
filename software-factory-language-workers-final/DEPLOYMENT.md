@@ -25,6 +25,9 @@ Set these Railway/server variables:
 - `GITHUB_OWNER` — optional; leave empty to use the authenticated token owner.
 - `GITHUB_ENABLED=true`
 - `GITHUB_AUTO_SYNC=true`
+- `MAX_AGENT_RUNS=250`
+- `MAX_PROJECT_SECONDS=0`
+- `MAX_AGENT_RUNS_BY_ROLE=developer:80,tester:40,reviewer:30,security:30`
 
 The factory never stores the GitHub token inside a generated project. Common secret files such as `.env`, `.pem`, `.key`, `.p12`, and service-account credential files are ignored/refused during sync.
 
@@ -182,3 +185,8 @@ The Compose deployment includes an optional `dashboard` service on port 8080.
 ## AI project budgets
 
 Each project has a persistent agent-run budget to prevent runaway autonomous loops. Configure `MAX_AGENT_RUNS` (default 250). A project that exhausts the budget is moved to `WAITING_FOR_QUOTA` and keeps its state/evidence for resume or human intervention.
+
+
+## Railway readiness
+
+Railway deployment is an external environment and must be verified from the Railway project itself. Before the first real generated project, configure persistent PostgreSQL, the bot/worker services, required environment variables, persistent workspace storage, health checks, and restart behavior. A pending external deployment check must not be treated as production verification.
