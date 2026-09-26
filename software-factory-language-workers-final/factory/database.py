@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,tas
 CREATE INDEX IF NOT EXISTS idx_jobs_status_priority ON jobs(status,priority,created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_project ON jobs(project_id);
 CREATE TABLE IF NOT EXISTS telegram_sessions(user_id INTEGER PRIMARY KEY,active_project_id TEXT,updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS telegram_chats(chat_id INTEGER PRIMARY KEY,updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS service_heartbeats(service TEXT PRIMARY KEY,updated_at TEXT NOT NULL,details_json TEXT NOT NULL);
 
 """
@@ -44,6 +45,10 @@ class Database:
  def get_active_project(self,user_id):
   with self.conn() as c:r=c.execute("SELECT active_project_id FROM telegram_sessions WHERE user_id=?",(user_id,)).fetchone()
   return r[0] if r else None
+ def register_telegram_chat(self,chat_id):
+  with self.conn() as c:c.execute("INSERT INTO telegram_chats(chat_id,updated_at) VALUES(?,?) ON CONFLICT(chat_id) DO UPDATE SET updated_at=excluded.updated_at",(chat_id,now().isoformat()))
+ def list_telegram_chats(self):
+  with self.conn() as c:return [r[0] for r in c.execute("SELECT chat_id FROM telegram_chats ORDER BY updated_at DESC").fetchall()]
  def enqueue_job(self,project_id,task_id=None,priority=50,worker_type=None):
   jid=new_id('job'); ts=now().isoformat()
   if worker_type is None:
