@@ -23,32 +23,31 @@ def singleton_service_lock(db, name: str, wait_seconds: int = 90):
         import psycopg
 
         conn = psycopg.connect(url, connect_timeout=15)
+        deadline = time.monotonic() + wait_seconds
+        acquired = False
+        key = _lock_key(name)
+        while time.monotonic() < deadline:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_try_advisory_lock(%s)", (key,))
+                acquired = bool(cur.fetchone()[0])
+            if acquired:
+                break
+            time.sleep(2)
+        if not acquired:
+            conn.close()
+            raise RuntimeError(
+                f"Another {name} instance is already running; "
+                f"singleton lock was not acquired within {wait_seconds}s."
+            )
         try:
-            deadline = time.monotonic() + wait_seconds
-            acquired = False
-            key = _lock_key(name)
-            while time.monotonic() < deadline:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT pg_try_advisory_lock(%s)", (key,))
-                    acquired = bool(cur.fetchone()[0])
-                if acquired:
-                    break
-                time.sleep(2)
-            if not acquired:
-                raise RuntimeError(
-                    f"Another {name} instance is already running; "
-                    f"singleton lock was not acquired within {wait_seconds}s."
-                )
+            yield
+        finally:
             try:
-                yield
+                with conn.cursor() as cur:
+                    cur.execute("SELECT pg_advisory_unlock(%s)", (key,))
+                conn.commit()
             finally:
-                try:
-                    with conn.cursor() as cur:
-                        cur.execute("SELECT pg_advisory_unlock(%s)", (key,))
-                    conn.commit()
-                finally:
-                    conn.close()
-            return
+                conn.close()
 
     # SQLite/local development fallback.
     import fcntl
