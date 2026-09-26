@@ -1,7 +1,7 @@
 from __future__ import annotations
 import signal
 from factory.config import get_settings
-from factory.database import Database
+from factory.storage import build_database
 from factory.orchestrator import Orchestrator
 from factory.queue import PersistentJobQueue, FactoryWorker
 from factory.integrations.telegram.notifications import TelegramNotifier
