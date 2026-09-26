@@ -21,7 +21,7 @@ For TASKS, create small executable tasks in dependency order. Prefer one numbere
                 'MVP':'# MVP\n\nCore requested journey.',
                 'ARCHITECTURE':'# Architecture\n\nModular project architecture.',
                 'REQUIREMENTS':'# Requirements\n\n- '+context.project.description,
-                'TASKS':'# Tasks\n\n- Initialize project structure\n- Implement requested functionality\n- Add automated tests',
+                'TASKS':'# Tasks\n\n- Implement requested functionality: '+context.project.description+' | Depends: 0 | Acceptance: requested functionality works | Files: app/main | Tests: automated tests\n- Add automated tests for the requested functionality | Depends: 1 | Acceptance: tests pass | Files: tests | Tests: automated tests',
                 'ACCEPTANCE_CRITERIA':'# Acceptance Criteria\n\n- Project reaches the human review gate.',
                 'RISKS':'# Risks\n\n- External dependencies may be unavailable.'
             }
