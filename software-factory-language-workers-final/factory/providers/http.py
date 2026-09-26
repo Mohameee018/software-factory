@@ -44,24 +44,53 @@ class OpenAICompatibleProvider(HTTPProvider):
         return LLMResponse(msg.get('content') or '', data.get('model', self.model), usage.get('prompt_tokens'), usage.get('completion_tokens'), data)
 
     def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
-        # Prefer native JSON-object response format, with schema instructions retained for broad model compatibility.
+        # Prefer native JSON-object output. If a compatible endpoint rejects
+        # response_format, retry once without it; the prompt still requires JSON.
+        schema_text = json.dumps(schema, ensure_ascii=False)
+        user_text = prompt + '\nJSON schema:\n' + schema_text
         if images:
-            user_content=[{'type':'text','text':prompt + '\nJSON schema:\n' + json.dumps(schema)}]
+            user_content=[{'type':'text','text':user_text}]
             user_content += [{'type':'image_url','image_url':{'url':'data:%s;base64,%s' % (x['mime_type'],x['data'])}} for x in images]
-            body={'model':self.model,'messages':[{'role':'system','content':system},{'role':'user','content':user_content}], 'response_format': {'type':'json_object'}}
         else:
-            body = {'model': self.model, 'messages': [{'role':'system','content':system},{'role':'user','content':prompt + '\nJSON schema:\n' + json.dumps(schema)}], 'response_format': {'type':'json_object'}}
-        data = self._request(f'{self.base_url}/chat/completions', body, {'Authorization': f'Bearer {self.api_key}', 'Content-Type':'application/json'}, timeout)
-        text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content')
-        if isinstance(text, dict):
-            return self.validate_structured(text, schema)
-        if not isinstance(text, str) or not text.strip():
+            user_content=user_text
+
+        base_body={'model':self.model,'messages':[{'role':'system','content':system},{'role':'user','content':user_content}]}
+        try:
+            body=dict(base_body)
+            body['response_format']={'type':'json_object'}
+            data=self._request(f'{self.base_url}/chat/completions',body,
+                {'Authorization':f'Bearer {self.api_key}','Content-Type':'application/json'},timeout)
+        except RuntimeError as exc:
+            # Some OpenAI-compatible gateways/models reject response_format even
+            # though normal chat completions work. Retry without that optional feature.
+            if 'HTTP 400' not in str(exc) and 'HTTP 404' not in str(exc):
+                raise
+            data=self._request(f'{self.base_url}/chat/completions',base_body,
+                {'Authorization':f'Bearer {self.api_key}','Content-Type':'application/json'},timeout)
+
+        text=((data.get('choices') or [{}])[0].get('message') or {}).get('content')
+        if isinstance(text,dict):
+            return self.validate_structured(text,schema)
+        if not isinstance(text,str) or not text.strip():
             raise ValueError('Provider returned empty structured output')
         try:
-            value = json.loads(text)
+            value=json.loads(text.strip())
         except json.JSONDecodeError as exc:
-            raise ValueError(f'Provider returned invalid structured JSON: {text[:500]}') from exc
-        return self.validate_structured(value, schema)
+            import re
+            cleaned=re.sub(r'^\`\`\`(?:json)?\s*|\s*\`\`\`$','',text.strip(),flags=re.I|re.S).strip()
+            if cleaned != text.strip():
+                try: value=json.loads(cleaned)
+                except json.JSONDecodeError: value=None
+            else:
+                value=None
+            if value is None:
+                match=re.search(r'\{.*\}',text,flags=re.S)
+                if not match:
+                    raise ValueError(f'Provider returned invalid structured JSON: {text[:500]}') from exc
+                try: value=json.loads(match.group(0))
+                except json.JSONDecodeError as inner:
+                    raise ValueError(f'Provider returned invalid structured JSON: {text[:500]}') from inner
+        return self.validate_structured(value,schema)
 
     def generate_json_with_images(self, system, prompt, schema, images, *, timeout=None):
         user_content=[{'type':'text','text':prompt + '\\nJSON schema:\\n' + json.dumps(schema)}]
