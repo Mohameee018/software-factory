@@ -353,8 +353,10 @@ class Orchestrator:
                     self.set_state(p,WorkflowState.BLOCKED if t.retry_count>=self.settings.max_retries else WorkflowState.FIXING)
                 continue
             if s==WorkflowState.REVIEWING:
-                if effective_mock: r=AgentResult(success=True,agent_name='Code Reviewer',summary='Mock review.',next_action='security')
-                else: self.notifier.agent_started(p, 'Code Reviewer', 'بدأ مراجعة الكود والجودة والمخاطر') if self.notifier else None
+                if effective_mock:
+                    r=AgentResult(success=True,agent_name='Code Reviewer',summary='Mock review.',next_action='security')
+                else:
+                    self.notifier.agent_started(p, 'Code Reviewer', 'بدأ مراجعة الكود والجودة والمخاطر') if self.notifier else None
                     r=self.agents['reviewer'].run(ctx)
                 self.record(state,r)
                 if r.detailed_output and isinstance(r.detailed_output,dict):
@@ -391,8 +393,11 @@ class Orchestrator:
                     self.set_state(p,WorkflowState.BLOCKED if t.retry_count>=self.settings.max_retries else WorkflowState.FIXING)
                 continue
             if s==WorkflowState.SECURITY_REVIEW:
-                r=AgentResult(success=True,agent_name='Security Reviewer',summary='Mock security review.',next_action='ready') if effective_mock else self.notifier.agent_started(p, 'Security Reviewer', 'بدأ فحص الأمان والثغرات') if self.notifier else None
-                    self.agents['security'].run(ctx)
+                if effective_mock:
+                    r=AgentResult(success=True,agent_name='Security Reviewer',summary='Mock security review.',next_action='ready')
+                else:
+                    self.notifier.agent_started(p, 'Security Reviewer', 'بدأ فحص الأمان والثغرات') if self.notifier else None
+                    r=self.agents['security'].run(ctx)
                 self.record(state,r)
                 if r.success: self.set_state(p,WorkflowState.READY_FOR_HUMAN)
                 else:
