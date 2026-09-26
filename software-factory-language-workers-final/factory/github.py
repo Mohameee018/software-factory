@@ -143,6 +143,12 @@ class GitHubProjectPublisher:
         if not self.enabled or not self.auto_sync:
             return None
         workspace = Path(workspace)
+        # Repair legacy workspaces that predate Git initialization.
+        git_dir = workspace / ".git"
+        if not git_dir.exists():
+            init = run("developer", "git init", workspace)
+            if init.exit_code != 0:
+                raise RuntimeError(init.stderr or init.stdout or "git init failed")
         ignore = workspace / ".gitignore"
         if not ignore.exists():
             ignore.write_text(
