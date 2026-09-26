@@ -9,3 +9,5 @@ from .release import ReleaseAgent
 from .uiux import UIUXAgent
 
 from .uiux_reviewer import UIUXReviewerAgent
+
+from .architect import ArchitectAgent
