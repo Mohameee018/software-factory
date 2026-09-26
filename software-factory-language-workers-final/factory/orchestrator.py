@@ -22,6 +22,7 @@ from factory.company_os import get_contract, select_team
 from factory.traceability import write_report
 from factory.project_memory import update_project_memory
 from factory.handoffs import create_handoff
+from factory.github import GitHubProjectPublisher
 
 @dataclass
 class Context:
@@ -32,6 +33,7 @@ class Context:
 class Orchestrator:
     def __init__(self, db, settings, notifier=None):
         self.db, self.settings, self.notifier = db, settings, notifier
+        self.github = GitHubProjectPublisher(settings)
         self.job_queue = None
         provider = build_provider(settings)
         self.model_router = ModelRouter(settings, notifier)
@@ -63,7 +65,15 @@ class Orchestrator:
         p = Project(id=pid, name=name, description=description, project_type=detected_type, workspace_path=str(w), repository_path=str(w), git_branch=branch_name)
         self.db.save_project(p)
         self.db.save_state(FactoryState(project_id=p.id, project_name=p.name, project_type=p.project_type, current_state=p.current_state, workspace_path=p.workspace_path, git_branch=branch_name, acceptance_criteria=p.acceptance_criteria))
-        self.db.event(WorkflowEvent(project_id=p.id, event_type='PROJECT_CREATED', state=p.current_state.value, details={'project_type': detected_type.value, 'git_branch': branch_name, 'branch_created': branch_result.exit_code == 0}))
+        github_details = None
+        if self.github.enabled:
+            try:
+                github_details = self.github.publish_new_project(w, name, pid, description)
+                self.db.event(WorkflowEvent(project_id=p.id, event_type='GITHUB_REPOSITORY_CREATED', details=github_details or {}))
+            except Exception as exc:
+                # GitHub publishing must never destroy local project creation.
+                self.db.event(WorkflowEvent(project_id=p.id, event_type='GITHUB_PUBLISH_FAILED', details={'error': str(exc)[:2000]}))
+        self.db.event(WorkflowEvent(project_id=p.id, event_type='PROJECT_CREATED', state=p.current_state.value, details={'project_type': detected_type.value, 'git_branch': branch_name, 'branch_created': branch_result.exit_code == 0, 'github_repo': (github_details or {}).get('full_name')}))
         return p
 
     def _prepare_flutter_project(self, p, state):
@@ -754,6 +764,13 @@ class Orchestrator:
             self.db.event(WorkflowEvent(project_id=state.project_id,event_type='FILE_MODIFIED',task_id=r.task_id,details={'path':path,'agent':r.agent_name}))
         for path in r.files_deleted:
             self.db.event(WorkflowEvent(project_id=state.project_id,event_type='FILE_DELETED',task_id=r.task_id,details={'path':path,'agent':r.agent_name}))
+        if self.github.enabled and self.github.auto_sync:
+            try:
+                sync = self.github.sync(state.workspace_path, f"chore(factory): sync after {r.agent_name}")
+                if sync:
+                    self.db.event(WorkflowEvent(project_id=state.project_id,event_type='GITHUB_SYNCED',task_id=r.task_id,details={'agent':r.agent_name,'sync':sync}))
+            except Exception as exc:
+                self.db.event(WorkflowEvent(project_id=state.project_id,event_type='GITHUB_SYNC_FAILED',task_id=r.task_id,details={'agent':r.agent_name,'error':str(exc)[:2000]}))
         if r.agent_name=='Test / QA Agent' and isinstance(r.detailed_output,dict):
             for row in r.detailed_output.get('results',[]):
                 try:
