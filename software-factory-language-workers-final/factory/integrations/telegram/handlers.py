@@ -185,7 +185,13 @@ class TelegramHandlers:
         ApprovalService(self.service.db).resolve(a,approved,f'Telegram user {update.effective_user.id}')
         await q.edit_message_text('APPROVED' if approved else 'REJECTED')
         p = self.service.db.get_project(a.project_id)
-        if p and a.requested_action == 'design_approval':
+        if p and a.requested_action == 'requirements_approval':
+            if approved:
+                self._enqueue(a.project_id, priority=100)
+            else:
+                self.service.set_state(p, WorkflowState.REQUIREMENTS_GATHERING)
+                self._enqueue(a.project_id, priority=100)
+        elif p and a.requested_action == 'design_approval':
             if approved:
                 self._enqueue(a.project_id, priority=100)
             else:
@@ -219,6 +225,9 @@ class TelegramHandlers:
         ApprovalService(self.service.db).resolve(a,approved,f'Telegram user {u.effective_user.id}')
         if approved:
             self._enqueue(a.project_id,a.task_id,priority=100)
+        elif a.requested_action == 'requirements_approval':
+            self.service.set_state(self.service.db.get_project(a.project_id), WorkflowState.REQUIREMENTS_GATHERING)
+            self._enqueue(a.project_id,priority=100)
         elif a.requested_action == 'final_approval':
             self.service.add_feedback(a.project_id, a.response or 'Final approval rejected; please implement the requested changes.')
             self._enqueue(a.project_id,priority=100)
