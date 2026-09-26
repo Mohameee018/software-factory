@@ -98,7 +98,8 @@ class ProjectManager:
         except Exception:
             return {"intent": "feedback", "artifact": "", "summary": "سأتعامل مع الرسالة كملاحظة للمشروع."}
 
-    def progress_map(self, project) -> str:
+    @staticmethod
+    def progress_map(project) -> str:
         """Render a client-facing roadmap from requirements to a usable release."""
         s = project.current_state
         stages = [
