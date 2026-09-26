@@ -18,6 +18,7 @@ class Settings:
     api_base_url: str = 'https://api.openai.com/v1'
     telegram_bot_token: str|None = None; telegram_allowed_user_ids: set[int]|None = None; telegram_allowed_chat_ids: set[int]|None = None
     telegram_enabled: bool = False; telegram_notification_level: str = 'important'
+    github_token: str|None = None; github_owner: str|None = None; github_enabled: bool = False; github_auto_sync: bool = True
     mode: str = 'auto'; ai_timeout: int = 120; database_url: str|None = None; worker_poll_interval: float = 2.0; job_max_retries: int = 5; worker_type: str = 'generic'
     def __post_init__(self):
         if self.telegram_allowed_user_ids is None: object.__setattr__(self, 'telegram_allowed_user_ids', set())
@@ -40,7 +41,7 @@ def load_settings():
       int(os.getenv('MAX_RETRIES') or os.getenv('FACTORY_MAX_RETRIES','3')), int(os.getenv('MAX_WORKFLOW_ITERATIONS') or os.getenv('FACTORY_MAX_ITERATIONS','30')), int(os.getenv('COMMAND_TIMEOUT') or os.getenv('FACTORY_COMMAND_TIMEOUT','120')),
       os.getenv('AI_BASE_URL') or os.getenv('FACTORY_API_BASE_URL','https://api.openai.com/v1'), os.getenv('TELEGRAM_BOT_TOKEN'), _csv_int(os.getenv('TELEGRAM_ALLOWED_USER_IDS','')),
       _csv_int(os.getenv('TELEGRAM_ALLOWED_CHAT_IDS','')), _env_bool(os.getenv('TELEGRAM_ENABLED','false')),
-      os.getenv('TELEGRAM_NOTIFICATION_LEVEL','important').lower(), os.getenv('FACTORY_MODE','real' if provider != 'mock' else 'mock').lower(),
+      os.getenv('TELEGRAM_NOTIFICATION_LEVEL','important').lower(), os.getenv('GITHUB_TOKEN'), os.getenv('GITHUB_OWNER'), _env_bool(os.getenv('GITHUB_ENABLED', 'true' if os.getenv('GITHUB_TOKEN') else 'false')), _env_bool(os.getenv('GITHUB_AUTO_SYNC','true')), os.getenv('FACTORY_MODE','real' if provider != 'mock' else 'mock').lower(),
       int(os.getenv('AI_TIMEOUT') or os.getenv('FACTORY_AI_TIMEOUT') or os.getenv('COMMAND_TIMEOUT') or '120'),
       os.getenv('DATABASE_URL'), float(os.getenv('WORKER_POLL_INTERVAL','2')), int(os.getenv('JOB_MAX_RETRIES','5')), os.getenv('WORKER_TYPE','generic').lower())
 _settings=None
