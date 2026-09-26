@@ -26,6 +26,13 @@ def show_project(project_id:str):
 @app.command('run')
 def run(project_id:str,dry_run:bool=typer.Option(False,'--dry-run'),mock:bool=typer.Option(False,'--mock')):
  st=svc().run(project_id,dry_run=dry_run,mock=mock);typer.echo(f'Run finished: {st.current_state.value}; iterations={st.iteration_count}')
+@app.command('github-public')
+def github_public(project_id:str):
+ s=svc(); p=s.db.get_project(project_id)
+ if not p: raise typer.BadParameter('Project not found')
+ info=s.github.make_public(p.workspace_path)
+ typer.echo(info.get('html_url') or info.get('full_name'))
+
 @app.command('status')
 def status(project_id:str):
  p=svc().db.get_project(project_id)
