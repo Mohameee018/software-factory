@@ -38,10 +38,15 @@ class TelegramNotifier:
         if preview:
             self.send_photo(project, preview)
         else:
+            image_sent=False
             for candidate in ('docs/design/preview.png','docs/design/preview.jpg','docs/design/preview.jpeg','docs/design/preview.webp'):
                 if (Path(project.workspace_path) / candidate).is_file():
                     self.send_photo(project, candidate)
+                    image_sent=True
                     break
+            if not image_sent and (Path(project.workspace_path) / 'docs/design/preview.html').is_file():
+                self._send('ℹ️ <b>#UIUX</b> الصورة كـPNG مش متاحة على الـworker حاليًا، فبعتلك الـHTML preview نفسه بدل ما أقول إن الصورة اتبعتت.')
+                self.send_document(project, 'docs/design/preview.html')
 
     def send_photo(self, project, relative_path):
         self._send_photo(project, relative_path)
