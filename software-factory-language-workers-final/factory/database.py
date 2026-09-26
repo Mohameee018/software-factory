@@ -62,8 +62,8 @@ class Database:
  def reclaim_expired_jobs(self):
   with self.conn() as c:
    ts=now().isoformat()
-   c.execute("UPDATE jobs SET status='RETRYING',worker_state='lease_expired',worker_id=NULL,lease_until=NULL,last_error=? WHERE status='RUNNING' AND lease_until IS NOT NULL AND lease_until<=?",("Worker lease expired; job returned to queue.",ts))
-   return c.rowcount
+   cursor=c.execute("UPDATE jobs SET status='RETRYING',worker_state='lease_expired',worker_id=NULL,lease_until=NULL,last_error=? WHERE status='RUNNING' AND lease_until IS NOT NULL AND lease_until<=?",("Worker lease expired; job returned to queue.",ts))
+   return cursor.rowcount
 
  def extend_job_lease(self,job_id,worker_id,minutes=30):
   lease=(datetime.now(timezone.utc)+timedelta(minutes=minutes)).isoformat()
@@ -180,5 +180,6 @@ class Database:
   fid=new_id('fb'); payload=json.dumps({'id':fid,'project_id':pid,'feedback':feedback,'created_at':now().isoformat()})
   with self.conn() as c:c.execute('INSERT INTO human_feedback VALUES(?,?,?,?,?)',(fid,pid,feedback,now().isoformat(),payload))
   return fid
- def artifact(self,pid,path,kind):
-  with self.conn() as c:c.execute('INSERT INTO artifacts(project_id,path,kind,created_at,data_json) VALUES(?,?,?,?,?)',(pid,path,kind,__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),json.dumps({'path':path,'kind':kind})))
+ def artifact(self,pid,path,kind,metadata=None):
+  payload={'path':path,'kind':kind,**(metadata or {})}
+  with self.conn() as c:c.execute('INSERT INTO artifacts(project_id,path,kind,created_at,data_json) VALUES(?,?,?,?,?)',(pid,path,kind,__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),json.dumps(payload)))
