@@ -365,7 +365,15 @@ class Orchestrator:
                     state.error_history.extend(r.errors[-3:]); self.db.save_state(state); self.set_state(p,WorkflowState.BLOCKED)
                 continue
             if s==WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL:
-                return state
+                approvals=[a for a in self.db.list_approvals(p.id) if a.requested_action=='requirements_approval']
+                latest=approvals[-1] if approvals else None
+                if latest and latest.status==ApprovalStatus.APPROVED:
+                    self.set_state(p,WorkflowState.DESIGNING)
+                elif latest and latest.status==ApprovalStatus.REJECTED:
+                    self.set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
+                else:
+                    return state
+                continue
             if s==WorkflowState.DESIGNING:
                 self.notifier.agent_started(p, 'UI/UX Designer Agent', 'بدأ تحديد الشاشات والـ user flow والـ design system') if self.notifier else None
                 r=self.agents['uiux'].run(ctx); self.record(state,r)
