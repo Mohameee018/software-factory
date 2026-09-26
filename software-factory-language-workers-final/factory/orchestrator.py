@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime, timezone
+import time
 import os
 import re
 from factory.models import *
@@ -294,20 +295,45 @@ class Orchestrator:
                         except Exception:pass
                     self.set_state(p,WorkflowState.WAITING_FOR_DESIGN_APPROVAL)
                 else:
-                    # Permanent provider configuration errors (notably 4xx/404)
-                    # must not cause a 30-iteration Telegram spam loop.
+                    # Provider outages/throttling are transient. The HTTP provider
+                    # already retries inside one request; this bounded workflow-level
+                    # retry survives short-lived incidents without blocking the project.
                     errors = r.errors[-3:] or ['UI/UX design failed.']
                     state.error_history.extend(errors)
-                    self.db.save_state(state)
-                    permanent = any(('AI provider HTTP 4' in e or 'NOT_FOUND' in e or 'no longer available' in e) for e in errors)
-                    if permanent:
+                    retry_key = 'uiux_provider'
+                    retry_count = state.retry_counts.get(retry_key, 0)
+                    text_errors = ' '.join(errors).upper()
+                    transient = any(x in text_errors for x in (
+                        'AI PROVIDER HTTP 408', 'AI PROVIDER HTTP 409',
+                        'AI PROVIDER HTTP 429', 'AI PROVIDER HTTP 500',
+                        'AI PROVIDER HTTP 502', 'AI PROVIDER HTTP 503',
+                        'AI PROVIDER HTTP 504', 'CONNECTION ERROR', 'TIMEOUT'
+                    ))
+                    permanent = any(x in text_errors for x in (
+                        'AI PROVIDER HTTP 400', 'AI PROVIDER HTTP 401',
+                        'AI PROVIDER HTTP 403', 'AI PROVIDER HTTP 404',
+                        'NOT_FOUND', 'NO LONGER AVAILABLE'
+                    ))
+                    if transient and not permanent and retry_count < 3:
+                        retry_count += 1
+                        state.retry_counts[retry_key] = retry_count
+                        self.db.save_state(state)
+                        delay = {1: 5, 2: 15, 3: 30}[retry_count]
                         if self.notifier:
-                            try: self.notifier._send('⛔ <b>#UIUX</b> التصميم متوقف بسبب إعداد AI غير صالح. أصلحت الـmodel تلقائيًا في النسخة الجديدة؛ بعد الـdeploy أعد تشغيل المشروع مرة واحدة.')
+                            try: self.notifier._send(
+                                f'🔁 <b>#UIUX</b> مزود الـAI مشغول أو غير متاح مؤقتًا. '
+                                f'هحاول تاني ({retry_count}/3) بعد {delay} ثانية.'
+                            )
                             except Exception: pass
-                        self.set_state(p,WorkflowState.BLOCKED)
+                        time.sleep(delay)
+                        self.set_state(p,WorkflowState.DESIGNING)
                     else:
                         if self.notifier:
-                            try: self.notifier._send('⚠️ <b>#UIUX</b> فشل مؤقت، هحاول مرة واحدة فقط بدل تكرار الرسائل بلا نهاية.')
+                            try: self.notifier._send(
+                                '⛔ <b>#UIUX</b> التصميم متوقف بعد استنفاد المحاولات المؤقتة.'
+                                if transient else
+                                '⛔ <b>#UIUX</b> التصميم متوقف بسبب خطأ دائم في إعداد مزود الـAI.'
+                            )
                             except Exception: pass
                         self.set_state(p,WorkflowState.BLOCKED)
                 continue
