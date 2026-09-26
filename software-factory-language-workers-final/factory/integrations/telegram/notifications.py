@@ -31,16 +31,18 @@ class TelegramNotifier:
             except Exception: pass
     def state_changed(self, project, state):
         important={'DESIGNING':'🎨 #UIUX بدأ تصميم المشروع','DESIGN_APPROVED':'✅ التصميم اتوافق عليه — الفريق يستعد للتنفيذ','PLANNING':'🧠 Planning started','DOCUMENTATION':'📋 Requirements generated','ANALYSIS':'🔍 Requirements analysis started','TASK_CREATION':'📋 Task creation started','IMPLEMENTATION':'💻 Implementation started','TESTING':'🧪 Tests running','REVIEWING':'🔍 Code review started','UX_REVIEW':'🎨 UI/UX implementation review started','SECURITY_REVIEW':'🛡️ Security review started','FIXING':'🔧 Fix loop started','READY_FOR_HUMAN':'✅ Project ready for human review','WAITING_FOR_QUOTA':'⏸️ Project waiting for AI quota recovery','BLOCKED':'⛔ Project blocked','FAILED':'❌ Project failed','CANCELLED':'🛑 Project cancelled'}
-        if state in important:self._send(f'{important[state]}\n\n{project_status(project)}')
+        if state in important:self._send(f'{important[state]}\n\n{project_status(project)}' + self._project_suffix(project))
     def agent_started(self, project, agent_name, action='بدأ العمل'):
         tag = tag_for(agent_name)
         self._send(f'🔄 <b>{tag}</b> {action}.' + self._project_suffix(project))
 
     def approval_requested(self, approval):
-        self._send(approval_text(approval),{'inline_keyboard':[[{'text':'✅ APPROVE','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT','callback_data':f'apr:r:{approval.id}'}]]})
+        project = self.db.get_project(approval.project_id) if self.db else None
+        approval_message = approval_text(approval) + (self._project_suffix(project) if project else '')
+        self._send(approval_message,{'inline_keyboard':[[{'text':'✅ APPROVE','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT','callback_data':f'apr:r:{approval.id}'}]]})
     def design_ready(self, project, approval, result):
         data=result.detailed_output if isinstance(result.detailed_output,dict) else {}
-        self._send(f"🎨 <b>UI/UX DESIGN READY</b>\n\n{project_status(project)}\n\n<b>Summary:</b> {data.get('design_summary','')}\n<b>Screens:</b> {', '.join(data.get('screens',[]))}\n\nPreview: <code>docs/design/preview.html</code>\n\nهتوصلك صورة الـ UI/UX دلوقتي.\n\nاضغط APPROVE أو اكتب «تمام». ", {'inline_keyboard':[[{'text':'✅ APPROVE DESIGN','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT DESIGN','callback_data':f'apr:r:{approval.id}'}]]})
+        self._send(f"🎨 <b>UI/UX DESIGN READY</b>\n\n{project_status(project)}" + self._project_suffix(project) + "\n\n<b>Summary:</b> {data.get('design_summary','')}\n<b>Screens:</b> {', '.join(data.get('screens',[]))}\n\nPreview: <code>docs/design/preview.html</code>\n\nهتوصلك صورة الـ UI/UX دلوقتي.\n\nاضغط APPROVE أو اكتب «تمام». ", {'inline_keyboard':[[{'text':'✅ APPROVE DESIGN','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT DESIGN','callback_data':f'apr:r:{approval.id}'}]]})
         preview = data.get('design_preview_image')
         if preview:
             self.send_photo(project, preview)
@@ -52,7 +54,7 @@ class TelegramNotifier:
                     image_sent=True
                     break
             if not image_sent and (Path(project.workspace_path) / 'docs/design/preview.html').is_file():
-                self._send('ℹ️ <b>#UIUX</b> الصورة كـPNG مش متاحة على الـworker حاليًا، فبعتلك الـHTML preview نفسه بدل ما أقول إن الصورة اتبعتت.')
+                self._send('ℹ️ <b>#UIUX</b> الصورة كـPNG مش متاحة على الـworker حاليًا، فبعتلك الـHTML preview نفسه بدل ما أقول إن الصورة اتبعتت.' + self._project_suffix(project))
                 self.send_document(project, 'docs/design/preview.html')
 
     def send_photo(self, project, relative_path):
@@ -89,13 +91,13 @@ class TelegramNotifier:
         self._send(f'{icon} <b>{tag}</b> {summary}' + (f'\\n🤖 Model: <code>{model}</code>' if model else '') + f'\\n\\n{project_status(project)}' + self._project_suffix(project))
 
     def ready_summary(self, project, tasks):
-        self._send(f'✅ <b>PROJECT READY FOR HUMAN REVIEW</b>\n\n{project_status(project)}\n\nTasks: {len(tasks)}')
+        self._send(f'✅ <b>PROJECT READY FOR HUMAN REVIEW</b>\n\n{project_status(project)}\n\nTasks: {len(tasks)}' + self._project_suffix(project))
 
 
     def release_ready(self, project, result):
         data = result.detailed_output if isinstance(result.detailed_output, dict) else {}
         package = data.get('package')
-        self._send("📦 <b>#RELEASE</b> Release package created\n\n" + project_status(project) + "\n\nPackage: <code>" + str(package or 'release/') + "</code>")
+        self._send("📦 <b>#RELEASE</b> Release package created\n\n" + project_status(project) + self._project_suffix(project) + "\n\nPackage: <code>" + str(package or 'release/') + "</code>")
         if package:
             self._send_document(project, package)
 
