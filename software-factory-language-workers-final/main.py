@@ -127,9 +127,20 @@ def ai_smoke():
   raise typer.Exit(code=1)
 @app.command('telegram')
 def telegram():
+ import threading
  from factory.integrations.telegram.bot import TelegramBot
  from factory.integrations.telegram.service import TelegramService
- s=get_settings(); s.ensure_directories(); db=Database(s.db_path); TelegramBot(TelegramService(db,s),s).run()
+ from factory.server import build_worker
+ s=get_settings(); s.ensure_directories(); db=Database(s.db_path)
+ service=TelegramService(db,s)
+ _,_,worker=build_worker()
+ worker_thread=threading.Thread(target=worker.run_forever,name='factory-worker',daemon=True)
+ worker_thread.start()
+ try:
+  TelegramBot(service,s).run()
+ finally:
+  worker.stop()
+  worker_thread.join(timeout=10)
 
 @app.command('worker')
 def worker():
