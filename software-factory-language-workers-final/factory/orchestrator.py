@@ -618,7 +618,7 @@ class Orchestrator:
         self.set_state(p,WorkflowState.BLOCKED); state.error_history.append('MAX_WORKFLOW_ITERATIONS reached'); self.db.save_state(state); return state
 
     def record(self,state,r):
-        role_map={'Planner Agent':'planner','Analyzer Agent':'analyzer','Developer Agent':'developer','Code Reviewer':'reviewer','UI/UX Reviewer':'uiux_reviewer','UI/UX Designer Agent':'uiux'}
+        role_map={'Planner Agent':'planner','Analyzer Agent':'analyzer','Architect Agent':'architect','Developer Agent':'developer','Code Reviewer':'reviewer','UI/UX Reviewer':'uiux_reviewer','UI/UX Designer Agent':'uiux'}
         role=role_map.get(r.agent_name)
         router=getattr(getattr(self,'agents',{}).get(role),'provider',None) if role else None
         if router and getattr(router,'last_model',None):
