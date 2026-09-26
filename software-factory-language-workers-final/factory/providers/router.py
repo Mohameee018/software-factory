@@ -93,14 +93,18 @@ class ModelRouter:
             if current_provider == 'openai-compatible' and 'generativelanguage.googleapis.com' in base_url:
                 # Gemini Flash models use the same OpenAI-compatible endpoint and
                 # key, while different model buckets can have independent limits.
-                for model_name in ('gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash'):
+                for model_name in (
+                    'gemini-3.7-flash',
+                    'gemini-3.6-flash',
+                    'gemini-3.5-flash',
+                    'gemini-3.5-flash-lite',
+                    'gemini-3.1-flash-lite',
+                ):
                     add_item(f'openai-compatible:{model_name}')
-            if os.getenv('OPENAI_API_KEY'):
-                add_item('openai:gpt-5.6-terra')
-            if os.getenv('GROQ_API_KEY'):
-                add_item('groq:openai/gpt-oss-120b')
-            if os.getenv('ANTHROPIC_API_KEY'):
-                add_item('anthropic:claude-sonnet-5')
+            # Do not auto-select unrelated providers merely because a key exists.
+            # A stale/unused provider key in Railway must not hijack the workflow.
+            # Cross-provider failover is opt-in through AI_MODELS / AI_MODELS_<ROLE>.
+            # For a Gemini deployment, keep the automatic pool inside Gemini.
         global_raw=os.getenv('AI_MODELS','').strip()
         if global_raw:
             for item in global_raw.split(','): add_item(item)
