@@ -33,7 +33,7 @@ class DeterministicE2EProvider(AIProvider):
         if 'Design professional' in system:
             return {'design_summary':'Test design.','design_system':'Simple responsive design.','screens':['Home'],'user_flow':'Open to action.','html_preview':'<html><body><h1>Test</h1></body></html>'}
         if 'Planner Agent' in system or 'natural-language request' in system:
-            return {'PRD':'# PRD\nBuild a local sample.','MVP':'# MVP\nPassing tests.','ARCHITECTURE':'# Architecture\nSimple Python package.','REQUIREMENTS':'# Requirements\n- Python project','TASKS':'# Tasks\n- Build sample project','ACCEPTANCE_CRITERIA':'# Acceptance\n- Tests pass','RISKS':'# Risks\n- None known'}
+            return {'PRD':'# PRD\nBuild a local sample.','MVP':'# MVP\nPassing tests.','ARCHITECTURE':'# Architecture\nSimple Python package.','REQUIREMENTS':'# Requirements\n- Build a local sample project','TASKS':'# Tasks\n- Build a local sample project','ACCEPTANCE_CRITERIA':'# Acceptance\n- Tests pass','RISKS':'# Risks\n- None known'}
         if 'Analyzer Agent' in system:
             return {'contradictions':[],'missing_requirements':[],'ambiguities':[],'missing_acceptance_criteria':[],'technical_risks':[],'security_risks':[],'dependency_issues':[],'blocking':False,'summary':'Analysis passed.'}
         if 'Compare the implemented application' in system:
@@ -108,7 +108,7 @@ class ClothesStoreProvider(AIProvider):
                 'MVP':'# MVP\nBrowse, details, cart.',
                 'ARCHITECTURE':'# Architecture\nCore Flutter only.',
                 'REQUIREMENTS':'# Requirements\nMen, Women, Kids; local data; no backend.',
-                'TASKS':'# Tasks\n1. Build Clothes Store UI | Depends: 0 | Acceptance: Home, categories, details, cart | Files: lib/main.dart, lib/models/product.dart, lib/data/products.dart, lib/screens/home_screen.dart, lib/screens/product_details_screen.dart, lib/screens/cart_screen.dart | Tests: widget tests',
+                'TASKS':'# Tasks\n1. Build Clothes Store UI for Men Women Kids | Depends: 0 | Acceptance: Home, categories, details, cart | Files: lib/main.dart, lib/models/product.dart, lib/data/products.dart, lib/screens/home_screen.dart, lib/screens/product_details_screen.dart, lib/screens/cart_screen.dart | Tests: widget tests',
                 'ACCEPTANCE_CRITERIA':'# Acceptance\n- Local mock data only\n- Cart total works',
                 'RISKS':'# Risks\n- Flutter SDK required.'
             }
