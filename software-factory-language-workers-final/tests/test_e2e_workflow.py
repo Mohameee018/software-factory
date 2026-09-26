@@ -24,6 +24,10 @@ class DeterministicE2EProvider(AIProvider):
     def generate(self, system, prompt, *, timeout=None): return LLMResponse('', 'e2e')
     def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
         if 'status' in schema.get('properties', {}):
+            props=schema.get('properties',{})
+            if 'architecture' in props: return {k:'Deterministic architecture.' for k in props}
+            if 'approved' in props: return {'approved':True,'summary':'Manager validation passed.','issues':[],'assignments':[]}
+            if 'traceability_ok' in props: return {'blocking':False,'findings':[],'missing_evidence':[],'traceability_ok':True,'tests_ok':True,'reviews_ok':True,'summary':'Audit passed.'}
             return {'status':'READY_FOR_REVIEW','reply':'Requirements ready.','missing_information':[],'project_name':'Test','project_type':'python','prd':'# PRD\nBuild sample.','requirements':'# Requirements\n- Build sample','acceptance_criteria':'# Acceptance\n- Tests pass','assumptions':[]}
         if 'Design professional' in system:
             return {'design_summary':'Test design.','design_system':'Simple responsive design.','screens':['Home'],'user_flow':'Open to action.','html_preview':'<html><body><h1>Test</h1></body></html>'}
@@ -93,6 +97,10 @@ class ClothesStoreProvider(AIProvider):
     def generate(self, system, prompt, *, timeout=None): return LLMResponse('', 'fake-clothes')
     def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
         if 'status' in schema.get('properties', {}):
+            props=schema.get('properties',{})
+            if 'architecture' in props: return {k:'Deterministic architecture.' for k in props}
+            if 'approved' in props: return {'approved':True,'summary':'Manager validation passed.','issues':[],'assignments':[]}
+            if 'traceability_ok' in props: return {'blocking':False,'findings':[],'missing_evidence':[],'traceability_ok':True,'tests_ok':True,'reviews_ok':True,'summary':'Audit passed.'}
             return {'status':'READY_FOR_REVIEW','reply':'Requirements ready.','missing_information':[],'project_name':'Clothes Store','project_type':'flutter','prd':'# PRD\nFlutter clothing store.','requirements':'# Requirements\n- Men, Women, Kids','acceptance_criteria':'# Acceptance\n- Cart total works','assumptions':[]}
         if 'Design professional' in system:
             return {'design_summary':'Professional clothing-store mobile UI.','design_system':'Clean responsive retail design with consistent spacing and accessible contrast.','screens':['Home','Categories','Product Details','Cart'],'user_flow':'Browse → details → add to cart → checkout.','html_preview':'<!doctype html><html><body><h1>Clothes Store</h1></body></html>'}
