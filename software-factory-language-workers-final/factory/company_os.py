@@ -83,6 +83,24 @@ ROLE_CONTRACTS: dict[str, EmployeeContract] = {
         frozenset({"read_release_artifacts","write_release_notes"}),("final_gate",),"client"),
 }
 
+def register_role(contract: EmployeeContract, *, replace: bool = False) -> None:
+    """Register an auditable worker role without modifying the core orchestrator."""
+    key = contract.role.strip().lower()
+    if not key:
+        raise ValueError("role cannot be empty")
+    if key in ROLE_CONTRACTS and not replace:
+        raise ValueError(f"role already registered: {key}")
+    ROLE_CONTRACTS[key] = contract
+
+def unregister_role(role: str) -> None:
+    key = role.strip().lower()
+    if key in {"manager","requirements","planner","architect","developer","tester","reviewer","security","release","uiux","uiux_reviewer","techlead","devops","writer","handoff"}:
+        raise ValueError("built-in roles cannot be removed")
+    ROLE_CONTRACTS.pop(key, None)
+
+def list_roles() -> tuple[str, ...]:
+    return tuple(sorted(ROLE_CONTRACTS))
+
 def get_contract(role: str) -> EmployeeContract:
     return ROLE_CONTRACTS.get(role.lower(), EmployeeContract(role.lower(),role,"Execute an explicitly assigned project responsibility.",(),(),(),()))
 
