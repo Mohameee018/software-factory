@@ -1,3 +1,4 @@
+from factory.agents.manager import ManagerAgent
 from factory.agents.requirements import RequirementsAgent
 from .planner import PlannerAgent
 from .analyzer import AnalyzerAgent
