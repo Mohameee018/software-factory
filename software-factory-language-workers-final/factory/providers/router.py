@@ -140,19 +140,18 @@ class ModelRouter:
                     'gemini-3.1-flash-lite',
                 ):
                     add_item(f'openai-compatible:{model_name}')
-        # Automatic cross-provider failover is enabled whenever the corresponding
-        # credential is present. Role-specific AI_MODELS is also allowed to fall back
-        # unless a global AI_MODELS list explicitly locks the pool.
+        # AI_MODELS defines preferred models; healthy cross-provider backups stay available too.
         global_raw=os.getenv('AI_MODELS','').strip()
-        if not global_raw:
+        if global_raw:
+            for item in global_raw.split(','): add_item(item)
+        failover_enabled = os.getenv('AI_FAILOVER_ENABLED', 'true').strip().lower() in {'1','true','yes','on'}
+        if failover_enabled:
             if os.getenv('GROQ_API_KEY'):
                 add_item(f"groq:{os.getenv('AI_FAILOVER_GROQ_MODEL','openai/gpt-oss-20b')}")
             if os.getenv('OPENAI_API_KEY') and current_provider != 'openai':
                 add_item(f"openai:{os.getenv('AI_FAILOVER_OPENAI_MODEL','gpt-5.6')}")
             if os.getenv('ANTHROPIC_API_KEY') and current_provider != 'anthropic':
                 add_item(f"anthropic:{os.getenv('AI_FAILOVER_ANTHROPIC_MODEL','claude-3-5-haiku-latest')}")
-        else:
-            for item in global_raw.split(','): add_item(item)
         return specs
 
     def provider_for(self, spec):
