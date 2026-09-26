@@ -41,8 +41,11 @@ def test_mock_workflow_reaches_human_review(tmp_path):
     o=Orchestrator(Database(settings.db_path),settings)
     p=o.create_project('Demo','Build a test project')
     state=o.run(p.id,mock=True)
-    assert state.current_state==WorkflowState.WAITING_FOR_DESIGN_APPROVAL
     from factory.approvals import ApprovalService
+    req=[a for a in o.db.list_approvals(p.id) if a.requested_action=='requirements_approval'][-1]
+    ApprovalService(o.db).resolve(req, True, 'test requirements')
+    state=o.run(p.id,mock=True)
+    assert state.current_state==WorkflowState.WAITING_FOR_DESIGN_APPROVAL
     approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
     ApprovalService(o.db).resolve(approval, True, 'test design')
     state=o.run(p.id,mock=True)
@@ -251,6 +254,7 @@ def test_e2e_real_mode_fake_llm_and_fake_flutter_adapter_reaches_review(tmp_path
         is_mock=False
         def generate_json(self, system, prompt, schema, *, timeout=None):
             props=schema.get('properties',{})
+            if 'status' in props: return {'status':'READY_FOR_REVIEW','reply':'Requirements ready.','missing_information':[],'project_name':'Clothes Store','project_type':'flutter','prd':'# PRD\nFlutter app.','requirements':'# Requirements\n- Build Flutter app','acceptance_criteria':'# Acceptance\n- App works','assumptions':[]}
             if 'PRD' in props: return {k: ('1. '+k+' | Depends: 0 | Acceptance: implemented | Files: lib/main.dart | Tests: widget test') for k in props}
             if 'blocking' in props: return {'contradictions':[],'missing_requirements':[],'ambiguities':[],'missing_acceptance_criteria':[],'technical_risks':[],'security_risks':[],'dependency_issues':[],'blocking':False,'summary':'ok'}
             if 'actions' in props: return {'summary':'implemented','actions':[{'op':'write','path':'pubspec.yaml','content':'name: clothes_store\n'},{'op':'write','path':'lib/main.dart','content':'void main() {}\n'}],'tests_to_run':['flutter test'],'warnings':[]}
@@ -269,9 +273,12 @@ def test_e2e_real_mode_fake_llm_and_fake_flutter_adapter_reaches_review(tmp_path
     p=o.create_project('Clothes Store','Build a Flutter clothing store app')
     (Path(p.workspace_path)/'pubspec.yaml').write_text('name: clothes_store\n')
     state=o.run(p.id)
-    assert state.current_state.value == 'WAITING_FOR_DESIGN_APPROVAL'
     from factory.approvals import ApprovalService
-    design=o.db.list_approvals(p.id)[0]
+    req=[a for a in o.db.list_approvals(p.id) if a.requested_action=='requirements_approval'][-1]
+    ApprovalService(o.db).resolve(req, True, 'test requirements')
+    state=o.run(p.id)
+    assert state.current_state.value == 'WAITING_FOR_DESIGN_APPROVAL'
+    design=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
     ApprovalService(o.db).resolve(design, True, 'test design')
     state=o.run(p.id)
     assert state.current_state.value == 'BLOCKED'
