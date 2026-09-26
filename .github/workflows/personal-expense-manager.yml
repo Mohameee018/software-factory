@@ -1,0 +1,26 @@
+name: Personal Expense Manager CI
+
+on:
+  push:
+    paths:
+      - "projects/personal-expense-manager/**"
+  pull_request:
+    paths:
+      - "projects/personal-expense-manager/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/personal-expense-manager
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed .
+      - run: flutter analyze
+      - run: flutter test
