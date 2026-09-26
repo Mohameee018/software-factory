@@ -9,6 +9,7 @@ from factory.integrations.telegram.formatter import project_status, task_lines
 from factory.roles import extract_target, TAG_TO_ROLE
 from factory.memory import load_user_memory, update_user_memory
 from factory.project_manager import ProjectManager
+from factory.project_detection import detect_project_type
 
 class TelegramHandlers:
     def __init__(self, service):
@@ -16,6 +17,24 @@ class TelegramHandlers:
         self.github=getattr(service,'github',None)
         self.notifier=getattr(service,'notifier',None)
         self.manager=ProjectManager(service)
+    def _ensure_project_type(self, project, description):
+        """Detect and persist a concrete project type at intake, before workflow work starts."""
+        try:
+            detected = detect_project_type(description or "", getattr(project, "workspace_path", None))
+            if detected == ProjectType.UNKNOWN:
+                return
+            project.project_type = detected
+            db = getattr(self.service, "db", None)
+            if db is not None:
+                db.save_project(project)
+                state = db.get_state(project.id)
+                if state is not None:
+                    state.project_type = detected
+                    db.save_state(state)
+        except Exception:
+            # Intake detection must never break project creation.
+            return
+
     async def _reply(self, update, text, **kwargs):
         """Send a client message with the live roadmap whenever a project is active."""
         pid = None
@@ -44,7 +63,7 @@ class TelegramHandlers:
     async def help(self, update, context): await update.effective_message.reply_text('/new /projects /project <id> /status <id> /manager /requirements /tasks <id> /run <id> /pause <id> /resume <id> /cancel <id> /retry <id> /logs <id> /approve <id> /reject <id> /review <id> /feedback <id> <text> /github-public <id>')
     async def new(self, update, context):
         if context.args:
-            description=' '.join(context.args); p=self.service.create_project('Telegram Project',description)
+            description=' '.join(context.args); p=self.service.create_project('Telegram Project',description); self._ensure_project_type(p,description)
             context.user_data['active_project_id']=p.id; effective_user=getattr(update,'effective_user',None); db=getattr(self.service,'db',None)
             if effective_user and db and hasattr(db,'set_active_project'): db.set_active_project(effective_user.id,p.id)
             self._set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
@@ -73,7 +92,7 @@ class TelegramHandlers:
 
         pid=context.user_data.get('active_project_id') or self.service.db.get_active_project(update.effective_user.id)
         if context.user_data.pop('awaiting_project',False):
-            p=self.service.create_project('Telegram Project',raw)
+            p=self.service.create_project('Telegram Project',raw); self._ensure_project_type(p,raw)
             context.user_data['active_project_id']=p.id; self.service.db.set_active_project(update.effective_user.id,p.id)
             p=self.service.db.get_project(p.id)
             # The first client message starts discovery, not coding.
@@ -168,7 +187,7 @@ class TelegramHandlers:
         if pid and self.service.db.get_project(pid):
             p=self.service.db.get_project(pid)
         else:
-            p=self.service.create_project('Telegram Project', (update.effective_message.caption or '').strip() or f'Client project with attached file: {doc.file_name}')
+            p=self.service.create_project('Telegram Project', (update.effective_message.caption or '').strip() or f'Client project with attached file: {doc.file_name}'); self._ensure_project_type(p, update.effective_message.caption or doc.file_name)
             context.user_data['active_project_id']=p.id; self.service.db.set_active_project(update.effective_user.id,p.id)
             self.service.set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
         target=Path(p.workspace_path)/'docs'/'attachments'/doc.file_name
