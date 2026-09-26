@@ -150,6 +150,16 @@ class TelegramHandlers:
                 self._enqueue(p.id,priority=100)
                 await update.effective_message.reply_text('👔 <b>#MANAGER</b> تمام. رجعت الـworkflow للطابور وهتابع الموظفين من هنا.',parse_mode='HTML')
                 return
+            # Conversational acknowledgements/inquiries are not bug reports.
+            conversational = {'تمام','تم','اشتغل','اشتاغل','ها','ها؟','؟','ok','okay','تمام؟','مستمر','كمل','كمّل'}
+            if msg in conversational and p.current_state not in (WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL,WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.READY_FOR_HUMAN):
+                self.service.db.event(WorkflowEvent(project_id=pid,event_type='HUMAN_CONVERSATIONAL_INPUT',details={'message':raw,'classified_as':'acknowledgment_or_inquiry'}))
+                if msg in {'اشتغل','اشتاغل','كمل','كمّل','مستمر'}:
+                    self._enqueue(pid,priority=100)
+                    await update.effective_message.reply_text('👔 <b>#MANAGER</b> تمام، كمّلنا. رجّعت المشروع للـworkflow من غير ما أعمل Fix Task جديدة.',parse_mode='HTML')
+                else:
+                    await update.effective_message.reply_text('👔 <b>#MANAGER</b> تمام، فهمت. مفيش Fix Task هتتعمل لمجرد الرسالة دي.',parse_mode='HTML')
+                return
             if p.current_state in (WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL,WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.READY_FOR_HUMAN) and msg in {'تمام','تم','موافق','approve','approved','ok','okay'}:
                 action={WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL:'requirements_approval',WorkflowState.WAITING_FOR_DESIGN_APPROVAL:'design_approval',WorkflowState.READY_FOR_HUMAN:'final_approval'}[p.current_state]
                 approvals=[a for a in self.service.db.list_approvals(p.id) if a.requested_action==action and a.status.value=='PENDING']
