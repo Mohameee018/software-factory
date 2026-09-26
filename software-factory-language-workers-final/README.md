@@ -257,7 +257,7 @@ AI_MODELS_DEVELOPER=openai:gpt-5.6-sol,anthropic:claude-opus-5,gemini:gemini-3.8
 AI_MODELS_REVIEWER=openai:gpt-5.6-sol,anthropic:claude-opus-5,gemini:gemini-3.8-flash
 AI_MODELS_UIUX_REVIEWER=openai:gpt-5.6-terra,gemini:gemini-3.8-flash,anthropic:claude-sonnet-5
 
-Provider credentials are read from GEMINI_API_KEY, OPENAI_API_KEY, and ANTHROPIC_API_KEY. The existing AI_API_KEY remains supported for the currently configured provider.
+Provider credentials are read from GEMINI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, and GROQ_API_KEY. Groq uses its OpenAI-compatible endpoint at https://api.groq.com/openai/v1. The existing AI_API_KEY remains supported for the currently configured provider.
 
 If every candidate reports a daily quota exhaustion, the project enters WAITING_FOR_QUOTA instead of BLOCKED. The job is persisted and automatically becomes runnable at the configured time:
 
@@ -265,3 +265,16 @@ FACTORY_QUOTA_TIMEZONE=Africa/Cairo
 FACTORY_QUOTA_RESUME_AT=09:00
 
 When the time arrives, the worker resumes from the exact previous workflow state and does not restart the project.
+
+
+### Groq and current OpenAI coding routing
+
+Groq can be added to any role pool with `groq:<model>`.
+
+```env
+GROQ_API_KEY=...
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+AI_MODELS_DEVELOPER=groq:openai/gpt-oss-120b,openai:gpt-5.6-sol
+```
+
+The old OpenAI Codex API model IDs (`gpt-5-codex`, `gpt-5.1-codex`, `gpt-5.2-codex`, etc.) are no longer valid live targets. If a legacy `codex:<old-id>` entry is configured, the router maps it to `gpt-5.6-sol` through the OpenAI Responses API. For new agent applications, OpenAI currently recommends the Responses API / Codex harness.
