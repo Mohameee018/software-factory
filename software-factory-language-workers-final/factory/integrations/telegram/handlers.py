@@ -131,9 +131,28 @@ class TelegramHandlers:
             p=self.service.db.get_project(pid)
             if p.current_state==WorkflowState.REQUIREMENTS_GATHERING:
                 await self._requirements_turn(update,context,p,raw); return
-            msg=raw.casefold()
+            msg=raw.casefold().strip()
+            # Approval gates are deterministic workflow controls. Resolve them BEFORE
+            # AI intent routing so the client-facing manager can never misclassify a
+            # simple approval (for example "تمام") as an artifact request.
+            if p.current_state in (WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL,WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.READY_FOR_HUMAN) and msg in {'تمام','تم','موافق','approve','approved','ok','okay'}:
+                action={WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL:'requirements_approval',WorkflowState.WAITING_FOR_DESIGN_APPROVAL:'design_approval',WorkflowState.READY_FOR_HUMAN:'final_approval'}[p.current_state]
+                approvals=[a for a in self.service.db.list_approvals(p.id) if a.requested_action==action and a.status.value=='PENDING']
+                if approvals:
+                    ApprovalService(self.service.db).resolve(approvals[-1],True,'Human approved via Telegram')
+                    if action=='requirements_approval':
+                        self.service.set_state(p,WorkflowState.DESIGNING)
+                        await update.effective_message.reply_text('✅ المتطلبات اتوافقت. الـManager هيبدأ مرحلة الـUI/UX والتصميم.')
+                    else:
+                        await update.effective_message.reply_text('✅ تمت الموافقة. المصنع بيكمل.')
+                    self._enqueue(p.id,priority=100)
+                else:
+                    await update.effective_message.reply_text('ℹ️ مفيش طلب موافقة معلّق للمرحلة الحالية. هكمل من حالة المشروع الفعلية.')
+                    self._enqueue(p.id,priority=100)
+                return
+
             # Client-facing Project Manager resolves natural-language status/artifact requests
-            # before generic feedback handling.
+            # only after deterministic workflow gates have been handled.
             routed=self.manager.route(getattr(update.effective_user,'id',None),raw,p)
             if routed.get('intent')=='artifact':
                 await self._send_requested_artifacts(update,context,p,routed.get('artifact',''))
