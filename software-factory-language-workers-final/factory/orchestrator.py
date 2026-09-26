@@ -41,7 +41,7 @@ class Orchestrator:
         self.job_queue = None
         self.budget = BudgetManager(db, settings)
         provider = build_provider(settings)
-        self.model_router = ModelRouter(settings, notifier)
+        self.model_router = ModelRouter(settings, notifier, db=db)
         self.agents = {
             'requirements': RequirementsAgent(self.model_router.for_role('requirements')), 'manager': ManagerAgent(self.model_router.for_role('manager')), 'planner': PlannerAgent(self.model_router.for_role('planner')), 'analyzer': AnalyzerAgent(self.model_router.for_role('analyzer')), 'architect': ArchitectAgent(self.model_router.for_role('architect')),
             'developer': DeveloperAgent(self.model_router.for_role('developer')), 'tester': TesterAgent(),
@@ -52,6 +52,7 @@ class Orchestrator:
         return self.budget.check_role_or_event(project_id, role)
 
     def run_agent(self, role, ctx):
+        self.model_router.set_project_context(ctx.project.id)
         if not self._agent_budget_allowed(ctx.project.id, role):
             return AgentResult(success=False, agent_name=role, errors=[f"Agent budget exhausted for role: {role}"], summary="Agent role budget exhausted.")
         return self.agents[role].run(ctx)
