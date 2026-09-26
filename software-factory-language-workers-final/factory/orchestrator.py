@@ -8,7 +8,7 @@ import re
 from factory.models import *
 from factory.state import transition
 from factory.database import Database
-from factory.agents import PlannerAgent, AnalyzerAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent, UIUXReviewerAgent
+from factory.agents import PlannerAgent, AnalyzerAgent, ArchitectAgent, DeveloperAgent, TesterAgent, ReviewerAgent, SecurityAgent, ReleaseAgent, UIUXAgent, UIUXReviewerAgent
 from factory.approvals import ApprovalService
 from factory.adapters.registry import detect, by_name
 from factory.project_detection import detect_project_type
@@ -17,6 +17,7 @@ from factory.tools.git import init_repo
 from factory.providers.registry import build_provider
 from factory.providers.mock import MockProvider
 from factory.providers.router import ModelRouter
+from factory.gates import verify
 
 @dataclass
 class Context:
@@ -31,7 +32,7 @@ class Orchestrator:
         provider = build_provider(settings)
         self.model_router = ModelRouter(settings, notifier)
         self.agents = {
-            'planner': PlannerAgent(self.model_router.for_role('planner')), 'analyzer': AnalyzerAgent(self.model_router.for_role('analyzer')),
+            'planner': PlannerAgent(self.model_router.for_role('planner')), 'analyzer': AnalyzerAgent(self.model_router.for_role('analyzer')), 'architect': ArchitectAgent(self.model_router.for_role('architect')),
             'developer': DeveloperAgent(self.model_router.for_role('developer')), 'tester': TesterAgent(),
             'reviewer': ReviewerAgent(self.model_router.for_role('reviewer')), 'uiux_reviewer': UIUXReviewerAgent(self.model_router.for_role('uiux_reviewer')), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(self.model_router.for_role('uiux'))
         }
@@ -327,12 +328,17 @@ class Orchestrator:
                 r=self.agents['uiux'].run(ctx); self.record(state,r)
                 if self._pause_for_quota(p,r,state): continue
                 if r.success:
-                    approval=ApprovalService(self.db).request(p.id,'design_approval','UI/UX design is ready. Approve the design before implementation.',Severity.MEDIUM,files=['docs/DESIGN.md','docs/design/preview.html'])
+                    gate_errors=verify(WorkflowState.WAITING_FOR_DESIGN_APPROVAL,p.workspace_path,r)
+                    if gate_errors:
+                        r.success=False; r.errors.extend(gate_errors); self.record(state,r)
+                    else:
+                        approval=ApprovalService(self.db).request(p.id,'design_approval','UI/UX design is ready. Approve the design before implementation.',Severity.MEDIUM,files=['docs/DESIGN.md','docs/design/preview.html'])
                     state.approvals.append(approval.id); self.db.save_state(state)
                     if self.notifier:
                         try:self.notifier.design_ready(p,approval,r)
                         except Exception:pass
-                    self.set_state(p,WorkflowState.WAITING_FOR_DESIGN_APPROVAL)
+                        state.stage_evidence[WorkflowState.WAITING_FOR_DESIGN_APPROVAL.value]=list(r.files_created); self.db.save_state(state)
+                        self.set_state(p,WorkflowState.WAITING_FOR_DESIGN_APPROVAL)
                 else:
                     # Provider outages/throttling are transient. The HTTP provider
                     # already retries inside one request; this bounded workflow-level
@@ -393,7 +399,12 @@ class Orchestrator:
                 r=self.agents['planner'].run(ctx); self.record(state,r)
                 if self._pause_for_quota(p,r,state): continue
                 self.set_state(p,WorkflowState.DOCUMENTATION if r.success else WorkflowState.BLOCKED); continue
-            if s==WorkflowState.DOCUMENTATION: self.set_state(p,WorkflowState.ANALYSIS); continue
+            if s==WorkflowState.DOCUMENTATION:
+                gate_errors=verify(WorkflowState.DOCUMENTATION,p.workspace_path)
+                if gate_errors:
+                    state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors); self.db.save_state(state); self.set_state(p,WorkflowState.BLOCKED)
+                else: self.set_state(p,WorkflowState.ANALYSIS)
+                continue
             if s==WorkflowState.ANALYSIS:
                 self.notifier.agent_started(p, 'Analyzer Agent', 'بدأ تحليل الـ architecture والمتطلبات التقنية') if self.notifier else None
                 r=self.agents['analyzer'].run(ctx); self.record(state,r)
@@ -401,7 +412,7 @@ class Orchestrator:
                 if r.success:
                     state.retry_counts.pop('analyzer_provider', None)
                     self.db.save_state(state)
-                    self.set_state(p,WorkflowState.TASK_CREATION)
+                    self.set_state(p,WorkflowState.ARCHITECTURE)
                 else:
                     errors = r.errors[-3:] or ['Analysis failed.']
                     state.error_history.extend(errors)
@@ -438,6 +449,16 @@ class Orchestrator:
                         continue
                     self.set_state(p,WorkflowState.BLOCKED)
                 continue
+            if s==WorkflowState.ARCHITECTURE:
+                self.notifier.agent_started(p, 'Architect Agent', 'بدأ تحويل المتطلبات والتصميم المعتمد إلى معمارية قابلة للتنفيذ') if self.notifier else None
+                r=self.agents['architect'].run(ctx); self.record(state,r)
+                if self._pause_for_quota(p,r,state): continue
+                gate_errors=verify(WorkflowState.ARCHITECTURE,p.workspace_path,r)
+                if r.success and not gate_errors:
+                    state.stage_evidence[WorkflowState.ARCHITECTURE.value]=list(r.completion_evidence or r.files_created); self.db.save_state(state); self.set_state(p,WorkflowState.TASK_CREATION)
+                else:
+                    errs=gate_errors or r.errors or ['Architecture gate failed.']; state.gate_failures.extend(errs); state.error_history.extend(errs); self.db.save_state(state); self.set_state(p,WorkflowState.BLOCKED)
+                continue
             if s==WorkflowState.TASK_CREATION: self.ensure_tasks(p); self.set_state(p,WorkflowState.IMPLEMENTATION); continue
             if s==WorkflowState.IMPLEMENTATION:
                 t=self.next_task(p)
@@ -449,6 +470,9 @@ class Orchestrator:
                     self.notifier.agent_started(p, 'Developer Agent', f'بدأ تنفيذ المهمة: {t.title}') if self.notifier else None
                     r=self.agents['developer'].run(ctx,t)
                 self.record(state,r)
+                gate_errors=verify(WorkflowState.IMPLEMENTATION,p.workspace_path,r,t)
+                if gate_errors:
+                    r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors)
                 if self._pause_for_quota(p,r,state):
                     t.status=TaskStatus.PENDING; self.db.save_task(t); continue
                 if r.success:
@@ -475,6 +499,9 @@ class Orchestrator:
                     self.notifier.agent_started(p, 'Test / QA Agent', 'بدأ تشغيل الاختبارات والتحقق من الوظائف') if self.notifier else None
                     r=self.agents['tester'].run(ctx)
                 self.record(state,r)
+                gate_errors=verify(WorkflowState.TESTING,p.workspace_path,r)
+                if gate_errors:
+                    r.success=False; r.errors.extend(gate_errors); state.gate_failures.extend(gate_errors); state.error_history.extend(gate_errors); self.db.save_state(state)
                 if r.success: self.set_state(p,WorkflowState.REVIEWING)
                 else:
                     # QA failures are corrective work, not ordinary queued work.
@@ -543,6 +570,9 @@ class Orchestrator:
                 continue
             if s==WorkflowState.FIXING: self.set_state(p,WorkflowState.IMPLEMENTATION if self.next_task(p) else WorkflowState.TESTING); continue
             if s==WorkflowState.READY_FOR_HUMAN:
+                final_gate=verify(WorkflowState.READY_FOR_HUMAN,p.workspace_path)
+                if final_gate:
+                    state.gate_failures.extend(final_gate); state.error_history.extend(final_gate); self.db.save_state(state); self.set_state(p,WorkflowState.BLOCKED); continue
                 approvals=[a for a in self.db.list_approvals(p.id) if a.requested_action=='final_approval']
                 latest=approvals[-1] if approvals else None
                 if latest is None:
