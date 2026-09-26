@@ -9,7 +9,7 @@ from factory.integrations.telegram.notifications import TelegramNotifier
 
 def build_worker():
     settings=get_settings(); settings.ensure_directories(); db=Database(settings.db_path)
-    notifier=TelegramNotifier(settings, db) if settings.telegram_enabled and settings.telegram_bot_token else None
+    notifier=TelegramNotifier(settings, db) if settings.telegram_bot_token else None
     orchestrator=Orchestrator(db,settings,notifier=notifier)
     queue=PersistentJobQueue(db,settings.job_max_retries)
     return settings,db,FactoryWorker(orchestrator,queue,settings.worker_poll_interval,worker_type=settings.worker_type)
