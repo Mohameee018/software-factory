@@ -92,6 +92,8 @@ class FakeFlutterAdapter(ProjectAdapter):
 class ClothesStoreProvider(AIProvider):
     def generate(self, system, prompt, *, timeout=None): return LLMResponse('', 'fake-clothes')
     def generate_json(self, system, prompt, schema, *, timeout=None, images=None):
+        if 'status' in schema.get('properties', {}):
+            return {'status':'READY_FOR_REVIEW','reply':'Requirements ready.','missing_information':[],'project_name':'Clothes Store','project_type':'flutter','prd':'# PRD\nFlutter clothing store.','requirements':'# Requirements\n- Men, Women, Kids','acceptance_criteria':'# Acceptance\n- Cart total works','assumptions':[]}
         if 'Design professional' in system:
             return {'design_summary':'Professional clothing-store mobile UI.','design_system':'Clean responsive retail design with consistent spacing and accessible contrast.','screens':['Home','Categories','Product Details','Cart'],'user_flow':'Browse → details → add to cart → checkout.','html_preview':'<!doctype html><html><body><h1>Clothes Store</h1></body></html>'}
         if 'Planner Agent' in system or 'natural-language request' in system:
