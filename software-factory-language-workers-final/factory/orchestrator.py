@@ -293,7 +293,16 @@ class Orchestrator:
                         try:self.notifier.design_ready(p,approval,r)
                         except Exception:pass
                     self.set_state(p,WorkflowState.WAITING_FOR_DESIGN_APPROVAL)
-                else:self.set_state(p,WorkflowState.BLOCKED)
+                else:
+                    # A transient provider/JSON failure should not permanently block
+                    # a new project. Keep the design gate retryable and preserve the
+                    # real error so the next attempt has context.
+                    state.error_history.extend(r.errors[-3:] or ['UI/UX design failed.'])
+                    self.db.save_state(state)
+                    if self.notifier:
+                        try: self.notifier._send('⚠️ <b>#UIUX</b> التصميم فشل مؤقتًا، هعيد المحاولة تلقائيًا مع الاحتفاظ بسبب الخطأ.')
+                        except Exception: pass
+                    self.set_state(p,WorkflowState.DESIGNING)
                 continue
             if s==WorkflowState.WAITING_FOR_DESIGN_APPROVAL:
                 approvals=[a for a in self.db.list_approvals(p.id) if a.requested_action=='design_approval']; latest=approvals[-1] if approvals else None
