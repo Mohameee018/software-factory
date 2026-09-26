@@ -357,3 +357,20 @@ def test_dynamic_role_registry_is_safe():
         pass
     else:
         raise AssertionError('built-in roles must not be removable')
+
+
+def test_artifact_versions_are_content_addressed(tmp_path):
+    from factory.artifacts import record_artifacts
+    from factory.database import Database
+    p=tmp_path/'artifact.txt'; p.write_text('one',encoding='utf-8')
+    db=Database(tmp_path/'factory.db')
+    pid='proj_artifact_test'
+    record_artifacts(tmp_path,pid,db,[p])
+    p.write_text('two',encoding='utf-8')
+    record_artifacts(tmp_path,pid,db,[p])
+    manifest=(tmp_path/'docs'/'ARTIFACT_MANIFEST.json').read_text(encoding='utf-8')
+    assert '"version": 1' in manifest and '"version": 2' in manifest
+
+def test_gitflow_branch_name_is_deterministic():
+    from factory.gitflow import GitFlow
+    assert GitFlow.branch_name('proj_123','task_456','work') == 'factory/work/task_456'
