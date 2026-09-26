@@ -13,6 +13,15 @@ class TelegramHandlers:
     def __init__(self, service):
         self.service=service; self.queue=getattr(service,'job_queue',None)
         self.github=getattr(service,'github',None)
+    def _set_state(self, project, state):
+        setter = getattr(self.service, 'set_state', None)
+        if setter:
+            return setter(project, state)
+        project.current_state = state
+        db = getattr(self.service, 'db', None)
+        if db and hasattr(db, 'save_project'):
+            db.save_project(project)
+
     def _enqueue(self, project_id, task_id=None, priority=50):
         if self.queue: return self.queue.enqueue(project_id,task_id,priority)
         return None
@@ -23,7 +32,7 @@ class TelegramHandlers:
             description=' '.join(context.args); p=self.service.create_project('Telegram Project',description)
             context.user_data['active_project_id']=p.id; effective_user=getattr(update,'effective_user',None); db=getattr(self.service,'db',None)
             if effective_user and db and hasattr(db,'set_active_project'): db.set_active_project(effective_user.id,p.id)
-            self.service.set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
+            self._set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
             await update.effective_message.reply_text(f'Created <code>{p.id}</code>. 🧑‍💼 #REQUIREMENTS هراجع اللي قلته وأسألك فقط عن اللي ناقص.',parse_mode='HTML')
             await self._requirements_turn(update,context,p,description)
             return
