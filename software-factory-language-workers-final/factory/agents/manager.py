@@ -3,6 +3,8 @@ from pathlib import Path
 from factory.agents.base import Agent
 from factory.models import AgentResult
 from factory.skills import select_skills
+from factory.company_os import get_contract
+from factory.skills_registry import names as discover_skill_names
 
 SCHEMA={
  "type":"object",
@@ -52,7 +54,8 @@ class ManagerAgent(Agent):
             n=int(a.get("task_number",0)); role=str(a.get("role","developer")).lower(); skills=list(a.get("skills") or [])
             if not skills:
                 source=task_lines[n-1] if 0<n<=len(task_lines) else ""
-                skills=select_skills(source,w)
-            lines.append(f"- Task {n}: #{role.upper()} | Skills: {', '.join(skills)}")
+                skills=list(dict.fromkeys(select_skills(source,w)+discover_skill_names(source,[role])))
+            contract=get_contract(role)
+            lines.append(f"- Task {n}: #{role.upper()} | Skills: {', '.join(skills)} | Gate: {', '.join(contract.quality_gates) or 'evidence'}")
         (d/"MANAGER_PLAN.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
         return AgentResult(success=bool(data.get("approved")),agent_name=self.name,summary=data.get("summary",""),detailed_output=data,files_created=["docs/MANAGER_PLAN.md"],next_action="implement" if data.get("approved") else "replan",errors=list(data.get("issues",[])) if not data.get("approved") else [],completion_evidence=["docs/MANAGER_PLAN.md"])
