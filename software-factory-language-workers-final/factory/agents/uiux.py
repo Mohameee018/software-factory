@@ -37,5 +37,25 @@ Create a professional UI/UX direction. Infer platform and audience. Define infor
         if getattr(self.provider,'is_mock',False):
             data={'design_summary':'Clean professional MVP interface focused on the primary user journey.','design_system':'Responsive layout, clear hierarchy, accessible contrast, consistent spacing and reusable components.','screens':['Home / Dashboard','Primary workflow','Settings / Help'],'user_flow':'Open → understand state → perform primary action → receive clear success/error feedback.','html_preview':'<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Inter,Arial,sans-serif;background:#f5f7fb;margin:0;padding:40px;color:#172033}.card{max-width:900px;margin:auto;background:white;border-radius:20px;padding:32px;box-shadow:0 12px 40px #0001}.btn{display:inline-block;padding:12px 18px;border-radius:10px;background:#172033;color:white}</style></head><body><div class="card"><h1>Product Preview</h1><p>Professional responsive interface preview.</p><span class="btn">Primary action</span></div></body></html>'}
         design_md=f"# UI/UX Design\n\n## Summary\n{data['design_summary']}\n\n## Design System\n{data['design_system']}\n\n## Screens\n"+'\n'.join(f"- {x}" for x in data['screens'])+f"\n\n## User Flow\n{data['user_flow']}\n"
-        (d/'DESIGN.md').write_text(design_md,encoding='utf-8'); (d/'preview.html').write_text(data['html_preview'],encoding='utf-8'); (w/'docs'/'DESIGN.md').write_text(design_md,encoding='utf-8')
-        return AgentResult(success=True,agent_name=self.name,summary='Professional UI/UX design and HTML preview generated.',detailed_output={'design_summary':data['design_summary'],'screens':data['screens'],'preview':'docs/design/preview.html'},files_created=['docs/DESIGN.md','docs/design/DESIGN.md','docs/design/preview.html'],next_action='human_design_approval')
+        (d/'DESIGN.md').write_text(design_md,encoding='utf-8')
+        (d/'preview.html').write_text(data['html_preview'],encoding='utf-8')
+        (w/'docs'/'DESIGN.md').write_text(design_md,encoding='utf-8')
+
+        preview_image = d / 'preview.png'
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page(viewport={'width': 1440, 'height': 1000})
+                page.goto((d/'preview.html').resolve().as_uri(), wait_until='networkidle')
+                page.screenshot(path=str(preview_image), full_page=True)
+                browser.close()
+        except Exception:
+            preview_image = None
+
+        output = {'design_summary':data['design_summary'],'screens':data['screens'],'preview':'docs/design/preview.html',
+                  'design_preview_image':'docs/design/preview.png' if preview_image and preview_image.is_file() else None}
+        created=['docs/DESIGN.md','docs/design/DESIGN.md','docs/design/preview.html']
+        if output['design_preview_image']: created.append('docs/design/preview.png')
+        return AgentResult(success=True,agent_name=self.name,summary='Professional UI/UX design and visual preview generated.',
+                           detailed_output=output,files_created=created,next_action='human_design_approval')
