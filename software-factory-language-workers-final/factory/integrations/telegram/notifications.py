@@ -20,8 +20,12 @@ class TelegramNotifier:
                 urllib.request.urlopen(req,timeout=20).read()
             except Exception: pass
     def state_changed(self, project, state):
-        important={'PLANNING':'🧠 Planning started','DOCUMENTATION':'📋 Requirements generated','ANALYSIS':'🔍 Requirements analysis started','TASK_CREATION':'📋 Task creation started','IMPLEMENTATION':'💻 Implementation started','TESTING':'🧪 Tests running','REVIEWING':'🔍 Code review started','UX_REVIEW':'🎨 UI/UX implementation review started','SECURITY_REVIEW':'🛡️ Security review started','FIXING':'🔧 Fix loop started','READY_FOR_HUMAN':'✅ Project ready for human review','BLOCKED':'⛔ Project blocked','FAILED':'❌ Project failed','CANCELLED':'🛑 Project cancelled'}
+        important={'DESIGNING':'🎨 #UIUX بدأ تصميم المشروع','DESIGN_APPROVED':'✅ التصميم اتوافق عليه — الفريق يستعد للتنفيذ','PLANNING':'🧠 Planning started','DOCUMENTATION':'📋 Requirements generated','ANALYSIS':'🔍 Requirements analysis started','TASK_CREATION':'📋 Task creation started','IMPLEMENTATION':'💻 Implementation started','TESTING':'🧪 Tests running','REVIEWING':'🔍 Code review started','UX_REVIEW':'🎨 UI/UX implementation review started','SECURITY_REVIEW':'🛡️ Security review started','FIXING':'🔧 Fix loop started','READY_FOR_HUMAN':'✅ Project ready for human review','BLOCKED':'⛔ Project blocked','FAILED':'❌ Project failed','CANCELLED':'🛑 Project cancelled'}
         if state in important:self._send(f'{important[state]}\n\n{project_status(project)}')
+    def agent_started(self, project, agent_name, action='بدأ العمل'):
+        tag = tag_for(agent_name)
+        self._send(f'🔄 <b>{tag}</b> {action}.')
+
     def approval_requested(self, approval):
         self._send(approval_text(approval),{'inline_keyboard':[[{'text':'✅ APPROVE','callback_data':f'apr:a:{approval.id}'},{'text':'❌ REJECT','callback_data':f'apr:r:{approval.id}'}]]})
     def design_ready(self, project, approval, result):
