@@ -19,4 +19,4 @@ class AnalyzerAgent(Agent):
             data={'contradictions':[],'missing_requirements':[],'ambiguities':[],'missing_acceptance_criteria':[],'technical_risks':[],'security_risks':[],'dependency_issues':[],'blocking':False,'summary':'Mock analysis passed.'}
         (d/'ANALYSIS.md').write_text('# Analysis\n\n'+str(data),encoding='utf-8')
         blocking=bool(data.get('blocking'))
-        return AgentResult(success=not blocking,agent_name=self.name,summary=data.get('summary','Analysis completed.'),detailed_output=data,files_created=['docs/ANALYSIS.md'],next_action='create_tasks' if not blocking else 'fix',errors=['Blocking analysis findings'] if blocking else [])
+        return AgentResult(success=not blocking,agent_name=self.name,summary=data.get('summary','Analysis completed.'),detailed_output=data,files_created=['docs/ANALYSIS.md'],next_action='create_tasks' if not blocking else 'fix',errors=['Blocking analysis findings'] if blocking else [],completion_evidence=['docs/ANALYSIS.md'])
