@@ -7,6 +7,7 @@ from factory.models import WorkflowEvent
 class Budget:
     max_agent_runs: int = 250
     max_project_seconds: int = 0
+    max_agent_runs_by_role: dict[str, int] | None = None
 
 class BudgetManager:
     def __init__(self, db, settings):
@@ -14,6 +15,7 @@ class BudgetManager:
         self.budget = Budget(
             int(getattr(settings, "max_agent_runs", 250)),
             int(getattr(settings, "max_project_seconds", 0)),
+            getattr(settings, "max_agent_runs_by_role", None),
         )
 
     def used_agent_runs(self, project_id):
@@ -21,6 +23,15 @@ class BudgetManager:
             return int(c.execute(
                 "SELECT COUNT(*) FROM agent_runs WHERE project_id=?", (project_id,)
             ).fetchone()[0])
+
+    def role_agent_runs(self, project_id, role):
+        with self.db.conn() as c:
+            return int(c.execute("SELECT COUNT(*) FROM agent_runs WHERE project_id=? AND agent_name=?", (project_id, role)).fetchone()[0])
+
+    def allowed_role(self, project_id, role):
+        limits = self.budget.max_agent_runs_by_role or {}
+        limit = int(limits.get(role, 0))
+        return limit <= 0 or self.role_agent_runs(project_id, role) < limit
 
     def project_seconds(self, project_id):
         project = self.db.get_project(project_id)
@@ -34,6 +45,12 @@ class BudgetManager:
         if self.budget.max_project_seconds > 0 and self.project_seconds(project_id) >= self.budget.max_project_seconds:
             return False
         return True
+
+    def check_role_or_event(self, project_id, role):
+        if self.allowed_role(project_id, role) and self.allowed(project_id):
+            return True
+        self.db.event(WorkflowEvent(project_id=project_id, event_type="AGENT_BUDGET_EXHAUSTED", details={"agent": role, "role_limit": (self.budget.max_agent_runs_by_role or {}).get(role, 0), "role_used": self.role_agent_runs(project_id, role), "global_used": self.used_agent_runs(project_id)}))
+        return False
 
     def check_or_event(self, project_id):
         if self.allowed(project_id):
