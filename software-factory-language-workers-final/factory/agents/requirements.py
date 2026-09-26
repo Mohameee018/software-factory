@@ -77,7 +77,15 @@ Do not turn this into a numbered questionnaire.
             fh.write(f"\n\n## Factory turn\nUser context: {context.project.description}\nFactory: {data.get('reply','')}\n")
         if data["status"]=="NEED_INFO":
             return AgentResult(success=True,agent_name=self.name,summary=data["reply"],detailed_output=data,next_action="ask_client")
-        # Preserve explicit client platform/domain; never let a generic model label overwrite it.\n        from factory.models import ProjectType\n        import re\n        detected_type = str(data.get("project_type","")).strip().casefold()\n        explicit_flutter = bool(re.search(r"\\bflutter\\b", history + "\\n" + context.project.description, re.I))\n        if explicit_flutter:\n            context.project.project_type = ProjectType.FLUTTER\n        elif detected_type in {x.value for x in ProjectType if x != ProjectType.UNKNOWN}:\n            context.project.project_type = ProjectType(detected_type)\n        (d/"PRD.md").write_text(str(data["prd"]),encoding="utf-8")
+        # Preserve explicit client platform/domain; never let a generic model label overwrite it.\n        from factory.models import ProjectType\n        import re\n        detected_type = str(data.get("project_type","")).strip().casefold()\n        explicit_flutter = bool(re.search(r"\\bflutter\\b", history + "\\n" + context.project.description, re.I))\n        if explicit_flutter:\n            context.project.project_type = ProjectType.FLUTTER\n        elif detected_type in {x.value for x in ProjectType if x != ProjectType.UNKNOWN}:\n            context.project.project_type = ProjectType(detected_type)\n        # Persist the platform confirmed during requirements discovery.
+        db = getattr(context, "db", None)
+        if db is not None:
+            db.save_project(context.project)
+            st = db.get_state(context.project.id)
+            if st is not None:
+                st.project_type = context.project.project_type
+                db.save_state(st)
+        (d/"PRD.md").write_text(str(data["prd"]),encoding="utf-8")
         (d/"REQUIREMENTS.md").write_text(str(data["requirements"]),encoding="utf-8")
         (d/"ACCEPTANCE_CRITERIA.md").write_text(str(data["acceptance_criteria"]),encoding="utf-8")
         (d/"ASSUMPTIONS.md").write_text("# Assumptions\n\n"+("\n".join(f"- {x}" for x in data.get("assumptions",[])) or "- None"),encoding="utf-8")
