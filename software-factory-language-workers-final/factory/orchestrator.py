@@ -37,9 +37,8 @@ class Orchestrator:
         }
 
     def provider_info(self):
-        provider = self.agents['planner'].provider
-        configured = isinstance(provider, MockProvider) or bool(getattr(provider, 'api_key', None))
-        return {'provider': self.settings.provider, 'model': self.settings.model, 'configured': configured, 'mock': isinstance(provider, MockProvider)}
+        configured = bool(self.model_router.specs_for('planner'))
+        return {'provider': self.settings.provider, 'model': self.settings.model, 'configured': configured, 'mock': self.settings.mode in ('mock','dry-run')}
 
     def authorized(self, update):
         uid = update.effective_user.id if update.effective_user else None
