@@ -289,7 +289,7 @@ class TelegramHandlers:
             self.service.add_feedback(a.project_id, a.response or 'Final approval rejected; please implement the requested changes.')
             self._enqueue(a.project_id,priority=100)
         await u.effective_message.reply_text('APPROVED' if approved else 'REJECTED')
-    async def _set_state(self,u,c,state):
+    async def _set_state_command(self,u,c,state):
         p=await self._require_project(u,c)
         if p: self.service.set_state(p,state); await u.effective_message.reply_text(state.value)
 
