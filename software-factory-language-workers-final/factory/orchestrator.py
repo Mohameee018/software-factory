@@ -20,6 +20,8 @@ from factory.providers.router import ModelRouter
 from factory.gates import verify
 from factory.company_os import get_contract, select_team
 from factory.traceability import write_report
+from factory.project_memory import update_project_memory
+from factory.handoffs import create_handoff
 
 @dataclass
 class Context:
@@ -727,6 +729,25 @@ class Orchestrator:
         if self.notifier:
             try: self.notifier.agent_result(self.db.get_project(state.project_id), r)
             except Exception: pass
+        try:
+            summary = r.summary or r.agent_name
+            update_project_memory(
+                state.workspace_path, state.project_id, state.current_state.value, summary,
+                [f"agent:{r.agent_name}", f"next:{r.next_action or 'none'}"]
+            )
+            if r.handoff and isinstance(r.handoff, dict):
+                h=r.handoff
+                create_handoff(
+                    state.workspace_path, state.project_id,
+                    str(h.get("from_role") or r.agent_name),
+                    str(h.get("to_role") or r.next_action or "manager"),
+                    str(h.get("purpose") or summary),
+                    list(h.get("inputs") or []),
+                    list(h.get("outputs") or r.completion_evidence or []),
+                    list(h.get("acceptance_checks") or [])
+                )
+        except Exception:
+            pass
         for path in r.files_created:
             self.db.event(WorkflowEvent(project_id=state.project_id,event_type='FILE_CREATED',task_id=r.task_id,details={'path':path,'agent':r.agent_name}))
         for path in r.files_modified:
