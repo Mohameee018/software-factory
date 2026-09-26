@@ -93,6 +93,13 @@ class TelegramHandlers:
         await update.effective_message.reply_text('اكتب /new ونبدأ.')
 
     async def _requirements_turn(self,update,context,p,user_message):
+        try:
+            memory=load_user_memory(self.service.settings.workspaces_root,update.effective_user.id)
+            mem_path=Path(p.workspace_path)/'docs'/'USER_MEMORY.md'
+            mem_path.parent.mkdir(parents=True,exist_ok=True)
+            mem_path.write_text('# User Working Memory\\n\\n'+(memory or 'No durable preferences recorded yet.'),encoding='utf-8')
+        except Exception:
+            pass
         f=Path(p.workspace_path)/'docs'/'CLIENT_CONVERSATION.md'; f.parent.mkdir(parents=True,exist_ok=True)
         with f.open('a',encoding='utf-8') as fh: fh.write("\n\n## Client\n"+user_message+"\n")
         try:
