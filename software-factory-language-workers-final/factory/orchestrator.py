@@ -277,6 +277,7 @@ class Orchestrator:
             if s==WorkflowState.IDEA:
                 self.set_state(p,WorkflowState.DESIGNING); continue
             if s==WorkflowState.DESIGNING:
+                self.notifier.agent_started(p, 'UI/UX Designer Agent', 'بدأ تحديد الشاشات والـ user flow والـ design system') if self.notifier else None
                 r=self.agents['uiux'].run(ctx); self.record(state,r)
                 if r.success:
                     approval=ApprovalService(self.db).request(p.id,'design_approval','UI/UX design is ready. Approve the design before implementation.',Severity.MEDIUM,files=['docs/DESIGN.md','docs/design/preview.html'])
@@ -300,9 +301,11 @@ class Orchestrator:
                         continue
                 self.set_state(p,WorkflowState.PLANNING); continue
             if s==WorkflowState.PLANNING:
+                self.notifier.agent_started(p, 'Planner Agent', 'بدأ تحليل المتطلبات وتحويلها إلى خطة تنفيذ') if self.notifier else None
                 r=self.agents['planner'].run(ctx); self.record(state,r); self.set_state(p,WorkflowState.DOCUMENTATION if r.success else WorkflowState.BLOCKED); continue
             if s==WorkflowState.DOCUMENTATION: self.set_state(p,WorkflowState.ANALYSIS); continue
             if s==WorkflowState.ANALYSIS:
+                self.notifier.agent_started(p, 'Analyzer Agent', 'بدأ تحليل الـ architecture والمتطلبات التقنية') if self.notifier else None
                 r=self.agents['analyzer'].run(ctx); self.record(state,r); self.set_state(p,WorkflowState.TASK_CREATION if r.success else WorkflowState.BLOCKED); continue
             if s==WorkflowState.TASK_CREATION: self.ensure_tasks(p); self.set_state(p,WorkflowState.IMPLEMENTATION); continue
             if s==WorkflowState.IMPLEMENTATION:
@@ -312,6 +315,7 @@ class Orchestrator:
                 if effective_mock:
                     r=AgentResult(success=True,agent_name='Developer Agent',task_id=t.id,summary='Mock implementation.',next_action='test')
                 else:
+                    self.notifier.agent_started(p, 'Developer Agent', f'بدأ تنفيذ المهمة: {t.title}') if self.notifier else None
                     r=self.agents['developer'].run(ctx,t)
                 self.record(state,r)
                 if r.success:
@@ -335,6 +339,7 @@ class Orchestrator:
                     self.set_state(p, WorkflowState.BLOCKED)
                     continue
                 else:
+                    self.notifier.agent_started(p, 'Test / QA Agent', 'بدأ تشغيل الاختبارات والتحقق من الوظائف') if self.notifier else None
                     r=self.agents['tester'].run(ctx)
                 self.record(state,r)
                 if r.success: self.set_state(p,WorkflowState.REVIEWING)
@@ -349,7 +354,8 @@ class Orchestrator:
                 continue
             if s==WorkflowState.REVIEWING:
                 if effective_mock: r=AgentResult(success=True,agent_name='Code Reviewer',summary='Mock review.',next_action='security')
-                else: r=self.agents['reviewer'].run(ctx)
+                else: self.notifier.agent_started(p, 'Code Reviewer', 'بدأ مراجعة الكود والجودة والمخاطر') if self.notifier else None
+                    r=self.agents['reviewer'].run(ctx)
                 self.record(state,r)
                 if r.detailed_output and isinstance(r.detailed_output,dict):
                     for raw in r.detailed_output.get('findings',[]):
@@ -367,6 +373,7 @@ class Orchestrator:
                 if effective_mock:
                     r=AgentResult(success=True,agent_name='UI/UX Reviewer',summary='Mock UI/UX review passed.',next_action='security')
                 else:
+                    self.notifier.agent_started(p, 'UI/UX Reviewer', 'بدأ مقارنة التنفيذ بالتصميم المعتمد') if self.notifier else None
                     r=self.agents['uiux_reviewer'].run(ctx)
                 self.record(state,r)
                 if r.detailed_output and isinstance(r.detailed_output,dict):
@@ -384,7 +391,8 @@ class Orchestrator:
                     self.set_state(p,WorkflowState.BLOCKED if t.retry_count>=self.settings.max_retries else WorkflowState.FIXING)
                 continue
             if s==WorkflowState.SECURITY_REVIEW:
-                r=AgentResult(success=True,agent_name='Security Reviewer',summary='Mock security review.',next_action='ready') if effective_mock else self.agents['security'].run(ctx)
+                r=AgentResult(success=True,agent_name='Security Reviewer',summary='Mock security review.',next_action='ready') if effective_mock else self.notifier.agent_started(p, 'Security Reviewer', 'بدأ فحص الأمان والثغرات') if self.notifier else None
+                    self.agents['security'].run(ctx)
                 self.record(state,r)
                 if r.success: self.set_state(p,WorkflowState.READY_FOR_HUMAN)
                 else:
