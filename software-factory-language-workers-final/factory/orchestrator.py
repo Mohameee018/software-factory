@@ -55,7 +55,16 @@ class Orchestrator:
         self.model_router.set_project_context(ctx.project.id)
         if not self._agent_budget_allowed(ctx.project.id, role):
             return AgentResult(success=False, agent_name=role, errors=[f"Agent budget exhausted for role: {role}"], summary="Agent role budget exhausted.")
-        return self.agents[role].run(ctx)
+        result = self.agents[role].run(ctx)
+        # Requirements can confirm the platform/domain after discovery. Persist it
+        # before the workflow advances so later stages never see stale UNKNOWN.
+        if role == 'requirements' and result.success:
+            self.db.save_project(ctx.project)
+            st = self.db.get_state(ctx.project.id)
+            if st:
+                st.project_type = ctx.project.project_type
+                self.db.save_state(st)
+        return result
 
     def provider_info(self):
         configured = bool(self.model_router.specs_for('planner'))
@@ -481,7 +490,7 @@ class Orchestrator:
                     cycle=state.retry_counts.get('analysis_correction',0)
                     findings=(r.detailed_output or {}) if isinstance(r.detailed_output,dict) else {}
                     blocking_items=[]
-                    for key in ('contradictions','missing_requirements','missing_acceptance_criteria','dependency_issues','technical_risks','security_risks'):
+                    for key in ('contradictions','missing_requirements','missing_acceptance_criteria','dependency_issues','technical_risks','security_risks','domain_misalignment'):
                         vals=findings.get(key,[]) or []
                         blocking_items.extend(vals if isinstance(vals,list) else [vals])
                     if blocking_items and cycle < 3:
@@ -495,6 +504,7 @@ class Orchestrator:
                         if self._pause_for_quota(p,pr,state): continue
                         if pr.success:
                             continue
+                        errors = pr.errors[-3:] or ['Corrective planning pass failed.']
                         self.set_state(p,WorkflowState.BLOCKED)
                     else:
                         errors = r.errors[-3:] or ['Analysis failed.']
