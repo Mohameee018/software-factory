@@ -31,4 +31,4 @@ For TASKS, create small executable tasks in dependency order. Prefer one numbere
             if not value:return AgentResult(success=False,agent_name=self.name,summary=f'Missing {n}.',errors=[f'planner_missing_{n}'],next_action='fix')
             p=d/f'{n}.md';p.write_text(str(value),encoding='utf-8');created.append(str(p.relative_to(w)))
         context.project.acceptance_criteria=[x.strip('- ').strip() for x in str(data['ACCEPTANCE_CRITERIA']).splitlines() if x.strip() and not x.startswith('#')]
-        return AgentResult(success=True,agent_name=self.name,summary='Generated validated project documentation.',detailed_output={'documents':DOCS},files_created=created,next_action='analyze')
+        return AgentResult(success=True,agent_name=self.name,summary='Generated validated project documentation.',detailed_output={'documents':DOCS},files_created=created,next_action='analyze',completion_evidence=created)
