@@ -4,7 +4,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 WORKDIR /app
 COPY . /app
 RUN pip install --no-cache-dir .
-RUN python -m playwright install --with-deps chromium
 RUN mkdir -p /data/projects /data/logs
 ENV DATABASE_PATH=/data/factory.db WORKSPACE_PATH=/data/projects
 CMD ["factory","telegram"]
