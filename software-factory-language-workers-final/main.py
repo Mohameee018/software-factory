@@ -119,6 +119,16 @@ def ai_smoke():
   typer.echo(f'Provider: {s.provider} | model: {s.model} | configured: yes | structured: yes'); typer.echo('Connection: OK'); typer.echo(f"Structured response valid: {bool(result.get('ok') is True and isinstance(result.get('message'), str))}")
  except Exception as e:
   typer.echo(f'Provider: {s.provider} | model: {s.model} | configured: yes'); typer.echo(f'Connection: FAILED | {type(e).__name__}: {str(e).replace(s.api_key or "", "[REDACTED]")}'); raise typer.Exit(code=1)
+@app.command('self-test')
+def self_test():
+ from factory.self_test import run_self_test
+ try:
+  results=run_self_test()
+  for name,result in results.items(): typer.echo(f'{name}: {result}')
+  typer.echo('SELF-TEST: PASS')
+ except Exception as exc:
+  typer.echo(f'SELF-TEST: FAIL | {type(exc).__name__}: {exc}')
+  raise typer.Exit(code=1)
 @app.command('telegram')
 def telegram():
  import threading
