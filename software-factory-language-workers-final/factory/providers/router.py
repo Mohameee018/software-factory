@@ -48,7 +48,11 @@ class RoleRouter:
         attempts=[]; quota_models=[]; last_error=None
         failed_models = self._failed_models()
         self.last_skipped = []
-        for spec in self.parent.specs_for(self.role):
+        # Be defensive if a custom/legacy router implementation returns None.
+        # A production smoke test must fail over or report a provider error, not crash
+        # while iterating the model specification pool.
+        specs = self.parent.specs_for(self.role) or [self.parent._default_spec()]
+        for spec in specs:
             label=spec['label']
             if label in failed_models:
                 self.last_skipped.append(label)
