@@ -26,4 +26,6 @@ class ReviewerAgent(Agent):
                 f=ReviewFinding(severity=Severity(str(raw.get('severity','MEDIUM')).upper()),category=str(raw.get('category','correctness')),file=raw.get('file'),line=raw.get('line'),description=str(raw.get('description','')),evidence=str(raw.get('evidence','')),suggested_fix=str(raw.get('suggested_fix','')))
                 findings.append(f)
             except Exception: continue
-        return AgentResult(success=not findings,agent_name=self.name,summary=data.get('summary','Review completed.'),detailed_output={'findings':[f.model_dump() for f in findings]},next_action='security' if not findings else 'fix')
+        report='# Code Review Report\n\n'+data.get('summary','Review completed.')+'\n\n'+str([f.model_dump() for f in findings])+'\n'
+        (Path(context.workspace)/'docs').mkdir(parents=True,exist_ok=True); (Path(context.workspace)/'docs'/'CODE_REVIEW.md').write_text(report,encoding='utf-8')
+        return AgentResult(success=not findings,agent_name=self.name,summary=data.get('summary','Review completed.'),detailed_output={'findings':[f.model_dump() for f in findings]},next_action='security' if not findings else 'fix',files_created=['docs/CODE_REVIEW.md'],completion_evidence=['docs/CODE_REVIEW.md'])
