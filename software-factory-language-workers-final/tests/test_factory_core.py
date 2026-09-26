@@ -41,6 +41,7 @@ def test_mock_workflow_reaches_human_review(tmp_path):
     settings.ensure_directories()
     o=Orchestrator(Database(settings.db_path),settings)
     p=o.create_project('Demo','Build a test project')
+    state=o.db.get_state(p.id); state.current_state=WorkflowState.DESIGNING; o.db.save_state(state); p.current_state=WorkflowState.DESIGNING; o.db.save_project(p)
     state=o.run(p.id,mock=True)
     from factory.approvals import ApprovalService
     reqs=[a for a in o.db.list_approvals(p.id) if a.requested_action=='requirements_approval']
