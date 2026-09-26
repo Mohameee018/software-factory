@@ -48,6 +48,9 @@ class Orchestrator:
             'reviewer': ReviewerAgent(self.model_router.for_role('reviewer')), 'uiux_reviewer': UIUXReviewerAgent(self.model_router.for_role('uiux_reviewer')), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(self.model_router.for_role('uiux')), 'auditor': AuditorAgent(self.model_router.for_role('auditor'))
         }
 
+    def _agent_budget_allowed(self, project_id, role):
+        return self.budget.check_role_or_event(project_id, role)
+
     def provider_info(self):
         configured = bool(self.model_router.specs_for('planner'))
         return {'provider': self.settings.provider, 'model': self.settings.model, 'configured': configured, 'mock': self.settings.mode in ('mock','dry-run')}
