@@ -22,7 +22,8 @@ from factory.company_os import get_contract, select_team
 from factory.traceability import write_report
 from factory.project_memory import update_project_memory
 from factory.handoffs import create_handoff
-from factory.github import GitHubProjectPublisher\nfrom factory.budget import BudgetManager\nfrom factory.artifacts import record_artifacts
+from factory.github import GitHubProjectPublisher
+from factory.budget import BudgetManager\nfrom factory.artifacts import record_artifacts
 
 @dataclass
 class Context:
@@ -34,7 +35,8 @@ class Orchestrator:
     def __init__(self, db, settings, notifier=None):
         self.db, self.settings, self.notifier = db, settings, notifier
         self.github = GitHubProjectPublisher(settings)
-        self.job_queue = None\n        self.budget = BudgetManager(db, settings)
+        self.job_queue = None
+        self.budget = BudgetManager(db, settings)
         provider = build_provider(settings)
         self.model_router = ModelRouter(settings, notifier)
         self.agents = {
@@ -779,6 +781,10 @@ class Orchestrator:
             self.db.event(WorkflowEvent(project_id=state.project_id,event_type='FILE_MODIFIED',task_id=r.task_id,details={'path':path,'agent':r.agent_name}))
         for path in r.files_deleted:
             self.db.event(WorkflowEvent(project_id=state.project_id,event_type='FILE_DELETED',task_id=r.task_id,details={'path':path,'agent':r.agent_name}))
+        try:
+            record_artifacts(state.workspace_path, state.project_id, self.db, list(dict.fromkeys(r.files_created + r.files_modified + r.completion_evidence)))
+        except Exception as exc:
+            self.db.event(WorkflowEvent(project_id=state.project_id,event_type='ARTIFACT_MANIFEST_FAILED',task_id=r.task_id,details={'error':str(exc)[:1000]}))
         if self.github.enabled and self.github.auto_sync:
             try:
                 sync = self.github.sync(state.workspace_path, f"chore(factory): sync after {r.agent_name}")
