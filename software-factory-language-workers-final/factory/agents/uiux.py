@@ -31,7 +31,9 @@ Create a professional UI/UX direction. Infer platform and audience. Define infor
             except OSError:
                 images = None
         try: data=self.provider.generate_json(self.instructions,prompt,SCHEMA,timeout=context.timeout,images=images)
-        except Exception as e: return AgentResult(success=False,agent_name=self.name,summary='UI/UX design failed.',errors=[str(e)],next_action='fix')
+        except Exception as e:
+            detail=str(e).strip() or 'Unknown UI/UX provider error.'
+            return AgentResult(success=False,agent_name=self.name,summary=f'UI/UX design failed: {detail[:700]}',errors=[detail],next_action='fix')
         if getattr(self.provider,'is_mock',False):
             data={'design_summary':'Clean professional MVP interface focused on the primary user journey.','design_system':'Responsive layout, clear hierarchy, accessible contrast, consistent spacing and reusable components.','screens':['Home / Dashboard','Primary workflow','Settings / Help'],'user_flow':'Open → understand state → perform primary action → receive clear success/error feedback.','html_preview':'<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Inter,Arial,sans-serif;background:#f5f7fb;margin:0;padding:40px;color:#172033}.card{max-width:900px;margin:auto;background:white;border-radius:20px;padding:32px;box-shadow:0 12px 40px #0001}.btn{display:inline-block;padding:12px 18px;border-radius:10px;background:#172033;color:white}</style></head><body><div class="card"><h1>Product Preview</h1><p>Professional responsive interface preview.</p><span class="btn">Primary action</span></div></body></html>'}
         design_md=f"# UI/UX Design\n\n## Summary\n{data['design_summary']}\n\n## Design System\n{data['design_system']}\n\n## Screens\n"+'\n'.join(f"- {x}" for x in data['screens'])+f"\n\n## User Flow\n{data['user_flow']}\n"
