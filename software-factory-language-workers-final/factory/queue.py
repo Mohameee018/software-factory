@@ -38,10 +38,10 @@ class FactoryWorker:
                 self._stop.wait(self.poll_interval); continue
             try:
                 current=self.orchestrator.db.get_project(job.project_id)
-                if current and current.project_type.value == 'unknown':
-                    self.orchestrator.set_state(current, __import__('factory.models',fromlist=['WorkflowState']).WorkflowState.BLOCKED)
-                    self.queue.fail(job.id, 'Unsupported project type.')
-                    continue
+                # UNKNOWN is allowed at intake. The factory must reach the UI/UX
+                # approval gate before implementation, and the stack may be decided later
+                # by planning/architecture. Only specialized workers should enforce their
+                # own project-type routing below.
                 if current and current.project_type.value != self.worker_type and self.worker_type != 'generic':
                     self.queue.retry(job.id, f'Job routed to {current.project_type.value} worker, current worker is {self.worker_type}.')
                     continue
