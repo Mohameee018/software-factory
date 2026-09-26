@@ -3,10 +3,11 @@ import asyncio
 from pathlib import Path
 from telegram import Update
 from telegram.ext import ContextTypes
-from factory.models import ProjectType, WorkflowState, WorkflowEvent
+from factory.models import ProjectType, WorkflowState, WorkflowEvent, Severity
 from factory.approvals import ApprovalService
 from factory.integrations.telegram.formatter import project_status, task_lines
 from factory.roles import extract_target, TAG_TO_ROLE
+from factory.memory import load_user_memory, update_user_memory
 
 class TelegramHandlers:
     def __init__(self, service): self.service=service; self.queue=getattr(service,'job_queue',None)
@@ -20,65 +21,89 @@ class TelegramHandlers:
             description=' '.join(context.args); p=self.service.create_project('Telegram Project',description); context.user_data['active_project_id']=p.id; effective_user=getattr(update,'effective_user',None); db=getattr(self.service,'db',None);
             if effective_user and db and hasattr(db,'set_active_project'): db.set_active_project(effective_user.id,p.id)
             self._enqueue(p.id); await update.effective_message.reply_text(f'Created <code>{p.id}</code>. 🚀 Execution queued.',parse_mode='HTML'); return
-        context.user_data['awaiting_project']=True; await update.effective_message.reply_text('Describe the project you want to build.')
+        context.user_data['awaiting_project']=True; await update.effective_message.reply_text('تمام. احكيلي عن المشروع براحتك، أو ابعت PRD/Design/صور/أي ملفات عندك.')
     async def text(self, update, context):
-        raw = update.effective_message.text or ''
+        raw = (update.effective_message.text or '').strip()
         target, message = extract_target(raw)
         if target:
             pid = context.user_data.get('active_project_id') or self.service.db.get_active_project(update.effective_user.id)
             if not pid or not self.service.db.get_project(pid):
-                await update.effective_message.reply_text('No active project. Use /new first.')
+                await update.effective_message.reply_text('مفيش مشروع نشط. اكتب /new الأول.')
                 return
-            p = self.service.db.get_project(pid)
+            p=self.service.db.get_project(pid)
+            self.service.db.event(WorkflowEvent(project_id=pid,event_type='HUMAN_DIRECTIVE',details={'target':target,'message':message}))
+            f=Path(p.workspace_path)/'docs'/'TEAM_CONTEXT.md'; f.parent.mkdir(parents=True,exist_ok=True)
+            with f.open('a',encoding='utf-8') as fh: fh.write("\n\n## "+target+" directive\n"+message+"\n")
             if target == '#ALL':
-                self.service.db.event(WorkflowEvent(project_id=pid,event_type='HUMAN_DIRECTIVE',details={'target':'#ALL','message':message}))
-                f = Path(p.workspace_path) / 'docs' / 'TEAM_CONTEXT.md'; f.parent.mkdir(parents=True,exist_ok=True)
-                with f.open('a',encoding='utf-8') as fh: fh.write('\n\n## #ALL directive\n' + message + '\n')
-                await update.effective_message.reply_text('📢 #ALL directive saved to the shared factory context.')
-                self._enqueue(pid,priority=100)
-                return
-            role = TAG_TO_ROLE[target]
-            self.service.db.event(WorkflowEvent(project_id=pid,event_type='HUMAN_DIRECTIVE',details={'target':target,'role':role,'message':message}))
-            f = Path(p.workspace_path) / 'docs' / 'TEAM_CONTEXT.md'
-            f.parent.mkdir(parents=True,exist_ok=True)
-            with f.open('a',encoding='utf-8') as fh:
-                fh.write("\n\n## " + target + " directive\n" + message + "\n")
-            if role == 'uiux' and p.current_state == WorkflowState.WAITING_FOR_DESIGN_APPROVAL:
-                self.service.add_feedback(pid, message)
-            elif role == 'developer':
-                self.service._add_fix_task(p, target + ' direct fix', message)
-                if p.current_state == WorkflowState.READY_FOR_HUMAN:
-                    self.service.set_state(p, WorkflowState.CHANGES_REQUESTED)
-                    self.service.set_state(p, WorkflowState.TASK_CREATION)
-            await update.effective_message.reply_text('📨 ' + target + ' استلم الرسالة. هتتنفذ حسب ترتيب الـworkflow، ومش هتتخطى الموظف اللي قبله.')
-            self._enqueue(pid,priority=100)
+                await update.effective_message.reply_text('📢 #ALL اتسجل في سياق الفريق.')
+            else:
+                await update.effective_message.reply_text('📨 '+target+' استلم الرسالة وهتدخل في الـworkflow.')
+            self._enqueue(pid,priority=100); return
+
+        pid=context.user_data.get('active_project_id') or self.service.db.get_active_project(update.effective_user.id)
+        if context.user_data.pop('awaiting_project',False):
+            p=self.service.create_project('Telegram Project',raw)
+            context.user_data['active_project_id']=p.id; self.service.db.set_active_project(update.effective_user.id,p.id)
+            p=self.service.db.get_project(p.id)
+            # The first client message starts discovery, not coding.
+            self.service.set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
+            await update.effective_message.reply_text('🧑‍💼 #REQUIREMENTS تمام، فهمت البداية. هسألك سؤال واحد في كل مرة حسب اللي تقوله، ولما الصورة تكتمل هجهز الـPRD والـRequirements.')
+            await self._requirements_turn(update,context,p,raw)
             return
-        if not context.user_data.pop('awaiting_project',False):
-            pid=context.user_data.get('active_project_id')
-            if pid and self.service.db.get_project(pid):
-                p=self.service.db.get_project(pid); msg=update.effective_message.text.strip().casefold()
-                if p.current_state in (WorkflowState.WAITING_FOR_DESIGN_APPROVAL, WorkflowState.READY_FOR_HUMAN) and msg in {'تمام','تم','موافق','approve','approved','ok','okay'}:
-                    action='design_approval' if p.current_state==WorkflowState.WAITING_FOR_DESIGN_APPROVAL else 'final_approval'
-                    approvals=[a for a in self.service.db.list_approvals(p.id) if a.requested_action==action and a.status.value=='PENDING']
-                    if approvals:
-                        ApprovalService(self.service.db).resolve(approvals[-1],True,'Human approved via Telegram')
-                        self._enqueue(p.id,priority=100)
-                        await update.effective_message.reply_text('✅ تمت الموافقة. المصنع بيكمل المرحلة التالية.')
-                    return
-                t=self.service.add_feedback(pid,update.effective_message.text)
-                if t:
-                    await update.effective_message.reply_text(f'🧑‍💼 #PM Feedback saved as task <code>{t.id}</code>. Resuming the factory.',parse_mode='HTML')
-                else:
-                    await update.effective_message.reply_text('🎨 #UIUX التعديل اتسجل. برجع الـUI/UX Agent يعيد التصميم.')
-                    self._enqueue(pid,priority=100)
+
+        if pid and self.service.db.get_project(pid):
+            p=self.service.db.get_project(pid)
+            if p.current_state==WorkflowState.REQUIREMENTS_GATHERING:
+                await self._requirements_turn(update,context,p,raw); return
+            msg=raw.casefold()
+            if p.current_state in (WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL,WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.READY_FOR_HUMAN) and msg in {'تمام','تم','موافق','approve','approved','ok','okay'}:
+                action={WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL:'requirements_approval',WorkflowState.WAITING_FOR_DESIGN_APPROVAL:'design_approval',WorkflowState.READY_FOR_HUMAN:'final_approval'}[p.current_state]
+                approvals=[a for a in self.service.db.list_approvals(p.id) if a.requested_action==action and a.status.value=='PENDING']
+                if approvals:
+                    ApprovalService(self.service.db).resolve(approvals[-1],True,'Human approved via Telegram')
+                    if action=='requirements_approval':
+                        await update.effective_message.reply_text('✅ المتطلبات اتوافقت. الـManager هيبدأ يراجعها ويجهز خطة المشروع.')
+                    else:
+                        await update.effective_message.reply_text('✅ تمت الموافقة. المصنع بيكمل.')
+                    self._enqueue(p.id,priority=100)
+                    if action=='requirements_approval':
+                        try:
+                            provider=self.service.model_router.for_role('requirements')
+                            update_user_memory(self.service.settings.workspaces_root,update.effective_user.id,(Path(p.workspace_path)/'docs'/'CLIENT_CONVERSATION.md').read_text(encoding='utf-8',errors='ignore'),provider,self.service.settings.ai_timeout)
+                        except Exception: pass
                 return
+            if p.current_state==WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL:
+                if msg.startswith(('عدّل','عدل','محتاج تعديل','مش تمام')):
+                    self.service.db.feedback(p.id,raw)
+                    self.service.set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
+                    await update.effective_message.reply_text('تمام، مش هعتمدها. قولّي إيه اللي محتاج يتغير وهكمل معاك من نفس السياق.')
+                    await self._requirements_turn(update,context,p,raw); return
+            if p.current_state in (WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.READY_FOR_HUMAN):
+                t=self.service.add_feedback(pid,raw)
+                await update.effective_message.reply_text('📝 التعديل اتسجل وهيرجع للمرحلة المناسبة.'); self._enqueue(pid,priority=100); return
+            t=self.service.add_feedback(pid,raw)
+            if t: await update.effective_message.reply_text(f'📝 اتسجلت ملاحظتك كمهمة <code>{t.id}</code>.',parse_mode='HTML')
             return
-        name='Telegram Project'
-        p=self.service.create_project(name, update.effective_message.text)
-        context.user_data['active_project_id']=p.id; effective_user=getattr(update,'effective_user',None); db=getattr(self.service,'db',None)
-        if effective_user and db and hasattr(db,'set_active_project'): db.set_active_project(effective_user.id,p.id)
-        self._enqueue(p.id)
-        await update.effective_message.reply_text(f'Created <code>{p.id}</code>. 🚀 Execution queued.',parse_mode='HTML')
+
+        await update.effective_message.reply_text('اكتب /new ونبدأ.')
+
+    async def _requirements_turn(self,update,context,p,user_message):
+        f=Path(p.workspace_path)/'docs'/'CLIENT_CONVERSATION.md'; f.parent.mkdir(parents=True,exist_ok=True)
+        with f.open('a',encoding='utf-8') as fh: fh.write("\n\n## Client\n"+user_message+"\n")
+        try:
+            r=self.service.agents['requirements'].run(type('Ctx',(),{'project':p,'workspace':p.workspace_path,'timeout':self.service.settings.ai_timeout})())
+        except Exception as e:
+            await update.effective_message.reply_text(f'حصل خطأ وأنا بجمع المتطلبات: {e}'); return
+        if r.next_action=='ask_client':
+            await update.effective_message.reply_text('💬 '+r.summary); return
+        if r.success:
+            approval=ApprovalService(self.service.db).request(p.id,'requirements_approval','Requirements package is ready for client approval.',Severity.MEDIUM,files=['docs/PRD.md','docs/REQUIREMENTS.md','docs/ACCEPTANCE_CRITERIA.md'])
+            st=self.service.db.get_state(p.id); st.approvals.append(approval.id); self.service.db.save_state(st)
+            self.service.set_state(p,WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL)
+            await update.effective_message.reply_text('📋 جهزت الـPRD والـRequirements والـAcceptance Criteria.\nراجعهم، ولو تمام اكتب «تمام». ولو محتاج تعديل قولي عادي.')
+        else:
+            await update.effective_message.reply_text('⚠️ '+(r.summary or 'محتاج أعيد محاولة جمع المتطلبات.'))
+
     async def photo(self, update, context):
         caption=(update.effective_message.caption or '').strip()
         if not caption:
