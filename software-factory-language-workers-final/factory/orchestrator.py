@@ -23,7 +23,8 @@ from factory.traceability import write_report
 from factory.project_memory import update_project_memory
 from factory.handoffs import create_handoff
 from factory.github import GitHubProjectPublisher
-from factory.budget import BudgetManager\nfrom factory.artifacts import record_artifacts
+from factory.budget import BudgetManager
+from factory.artifacts import record_artifacts
 
 @dataclass
 class Context:
