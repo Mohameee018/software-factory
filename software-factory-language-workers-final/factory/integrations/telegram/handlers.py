@@ -367,7 +367,15 @@ class TelegramHandlers:
             except Exception as e: await update.effective_message.reply_text(f'Retry blocked: {e}')
     async def logs(self, update, context):
         p=await self._require_project(update,context)
-        if p: await update.effective_message.reply_text('\n'.join(f'{e.timestamp.isoformat()} {e.event_type}' for e in self.service.db.list_events(p.id,30)) or 'No events.')
+        if not p:
+            return
+        events = self.service.db.list_events(p.id, 30)
+        text = '\\n'.join(f'{e.timestamp.isoformat()} {e.event_type}' for e in events) or 'No events.'
+        # Telegram messages are limited to 4096 characters. Keep a safety margin.
+        max_chars = 3500
+        if len(text) > max_chars:
+            text = '⚠️ Logs truncated to the latest events.\\n' + text[-(max_chars - 50):]
+        await update.effective_message.reply_text(text)
     async def approve(self, update, context): await self._resolve(update,context,True)
     async def reject(self, update, context): await self._resolve(update,context,False)
     async def review(self, update, context):
