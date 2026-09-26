@@ -147,6 +147,7 @@ def test_clothes_store_end_to_end_with_fake_dependencies(tmp_path, monkeypatch):
     monkeypatch.setattr('factory.orchestrator.run_command', lambda role, command, cwd, timeout=120: __import__('factory.tools.shell',fromlist=['CommandResult']).CommandResult(command,0,'ok','',0.01))
     monkeypatch.setattr('factory.agents.tester.execute', lambda role, kind, command, cwd, timeout: __import__('factory.tools.shell',fromlist=['CommandResult']).CommandResult(command,0,'ok','',0.01))
     p=o.create_project('Clothes Store','Build a Flutter clothing store with Men Women Kids, product details, cart and local mock data.')
+    state=o.db.get_state(p.id); state.current_state=WorkflowState.DESIGNING; o.db.save_state(state); p.current_state=WorkflowState.DESIGNING; o.db.save_project(p)
     # Simulate Flutter project creation because this test isolates the orchestration contract, not the SDK.
     (Path(p.workspace_path)/'pubspec.yaml').write_text('name: clothes_store\n')
     state=o.run(p.id)
