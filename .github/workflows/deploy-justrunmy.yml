@@ -1,0 +1,33 @@
+name: Deploy to JustRunMy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to JustRunMy registry
+        uses: docker/login-action@v3
+        with:
+          registry: jdr-m65fy49js7.justrunmy.app
+          username: ${{ secrets.JUSTRUNMY_REGISTRY_USERNAME }}
+          password: ${{ secrets.JUSTRUNMY_REGISTRY_PASSWORD }}
+
+      - name: Build image
+        run: |
+          docker build \
+            -f software-factory-language-workers-final/Dockerfile \
+            -t jdr-m65fy49js7.justrunmy.app/m65fy49js7:latest \
+            software-factory-language-workers-final
+
+      - name: Push image
+        run: docker push jdr-m65fy49js7.justrunmy.app/m65fy49js7:latest
