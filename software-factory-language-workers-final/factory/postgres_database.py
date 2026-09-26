@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from contextlib import contextmanager
 
 try:
@@ -57,18 +58,29 @@ class PostgresDatabase(Database):
 
     @contextmanager
     def conn(self):
-        with psycopg.connect(self.database_url, connect_timeout=15) as raw:
-            raw.autocommit = False
-            cursor = raw.cursor()
-            wrapped = PostgresCursor(cursor)
+        last_error = None
+        for attempt in range(3):
             try:
-                yield wrapped
-                raw.commit()
-            except Exception:
-                raw.rollback()
-                raise
-            finally:
-                cursor.close()
+                with psycopg.connect(self.database_url, connect_timeout=15) as raw:
+                    raw.autocommit = False
+                    cursor = raw.cursor()
+                    wrapped = PostgresCursor(cursor)
+                    try:
+                        yield wrapped
+                        raw.commit()
+                    except Exception:
+                        raw.rollback()
+                        raise
+                    finally:
+                        cursor.close()
+                return
+            except psycopg.OperationalError as exc:
+                last_error = exc
+                if attempt == 2:
+                    raise
+                time.sleep(0.5 * (2 ** attempt))
+        if last_error:
+            raise last_error
 
     def init(self):
         schema = SCHEMA
@@ -80,6 +92,8 @@ class PostgresDatabase(Database):
         )
         with self.conn() as c:
             c.executescript(schema)
+            c.execute("CREATE TABLE IF NOT EXISTS schema_migrations(version BIGINT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())")
+            c.execute("INSERT INTO schema_migrations(version) VALUES(1) ON CONFLICT(version) DO NOTHING")
             # PostgreSQL has no PRAGMA table_info; inspect the information schema.
             cols = {
                 r[0]
