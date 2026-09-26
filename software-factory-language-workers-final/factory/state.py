@@ -19,7 +19,7 @@ TRANSITIONS={
  WorkflowState.UX_REVIEW:{WorkflowState.SECURITY_REVIEW,WorkflowState.FIXING,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.SECURITY_REVIEW:{WorkflowState.READY_FOR_HUMAN,WorkflowState.FIXING,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.FIXING:{WorkflowState.IMPLEMENTATION,WorkflowState.TESTING,WorkflowState.REVIEWING,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
- WorkflowState.READY_FOR_HUMAN:{WorkflowState.CHANGES_REQUESTED,WorkflowState.COMPLETED,WorkflowState.CANCELLED,WorkflowState.PAUSED},
+ WorkflowState.READY_FOR_HUMAN:{WorkflowState.CHANGES_REQUESTED,WorkflowState.COMPLETED,WorkflowState.BLOCKED,WorkflowState.CANCELLED,WorkflowState.PAUSED},
  WorkflowState.CHANGES_REQUESTED:{WorkflowState.TASK_CREATION,WorkflowState.BLOCKED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.BLOCKED:{WorkflowState.PLANNING,WorkflowState.TASK_CREATION,WorkflowState.IMPLEMENTATION,WorkflowState.FIXING,WorkflowState.CANCELLED,WorkflowState.PAUSED},
  WorkflowState.FAILED:{WorkflowState.PLANNING,WorkflowState.CANCELLED,WorkflowState.PAUSED},
