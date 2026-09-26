@@ -105,6 +105,40 @@ class GitHubProjectPublisher:
             if result.exit_code != 0:
                 raise RuntimeError(result.stderr or result.stdout or "Failed to add GitHub remote")
 
+    def _repo_full_name_from_remote(self, workspace: str | Path):
+        remote = run("developer", "git remote get-url origin", workspace)
+        if remote.exit_code != 0:
+            raise RuntimeError("GitHub remote is not configured")
+        value = (remote.stdout or "").strip()
+        value = re.sub(r"^https://github\.com/", "", value)
+        value = re.sub(r"^git@github\.com:", "", value)
+        value = value.removesuffix(".git").strip("/")
+        if "/" not in value:
+            raise RuntimeError("GitHub remote is not a GitHub repository")
+        return value
+
+    def make_public(self, workspace: str | Path):
+        if not self.enabled:
+            raise RuntimeError("GitHub publishing is not configured")
+        full_name = self._repo_full_name_from_remote(workspace)
+        result = self._request("PATCH", f"https://api.github.com/repos/{full_name}", {"private": False})
+        return {
+            "full_name": result.get("full_name", full_name),
+            "html_url": result.get("html_url"),
+            "private": bool(result.get("private", False)),
+        }
+
+    def repo_info(self, workspace: str | Path):
+        if not self.enabled:
+            return None
+        full_name = self._repo_full_name_from_remote(workspace)
+        result = self._api(f"/repos/{full_name}")
+        return {
+            "full_name": result.get("full_name", full_name),
+            "html_url": result.get("html_url"),
+            "private": bool(result.get("private", False)),
+        }
+
     def sync(self, workspace: str | Path, message: str = "chore(factory): sync generated project"):
         if not self.enabled or not self.auto_sync:
             return None
