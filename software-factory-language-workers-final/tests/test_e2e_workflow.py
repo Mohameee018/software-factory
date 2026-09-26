@@ -1,3 +1,4 @@
+from factory.approvals import ApprovalService
 from pathlib import Path
 from factory.config import Settings
 from factory.database import Database
