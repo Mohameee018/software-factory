@@ -16,6 +16,7 @@ from factory.tools.shell import run as run_command
 from factory.tools.git import init_repo
 from factory.providers.registry import build_provider
 from factory.providers.mock import MockProvider
+from factory.providers.router import ModelRouter
 
 @dataclass
 class Context:
@@ -28,10 +29,11 @@ class Orchestrator:
         self.db, self.settings, self.notifier = db, settings, notifier
         self.job_queue = None
         provider = build_provider(settings)
+        self.model_router = ModelRouter(settings, notifier)
         self.agents = {
-            'planner': PlannerAgent(provider), 'analyzer': AnalyzerAgent(provider),
-            'developer': DeveloperAgent(provider), 'tester': TesterAgent(),
-            'reviewer': ReviewerAgent(provider), 'uiux_reviewer': UIUXReviewerAgent(provider), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(provider)
+            'planner': PlannerAgent(self.model_router.for_role('planner')), 'analyzer': AnalyzerAgent(self.model_router.for_role('analyzer')),
+            'developer': DeveloperAgent(self.model_router.for_role('developer')), 'tester': TesterAgent(),
+            'reviewer': ReviewerAgent(self.model_router.for_role('reviewer')), 'uiux_reviewer': UIUXReviewerAgent(self.model_router.for_role('uiux_reviewer')), 'security': SecurityAgent(), 'release': ReleaseAgent(), 'uiux': UIUXAgent(self.model_router.for_role('uiux'))
         }
 
     def provider_info(self):
@@ -252,6 +254,27 @@ class Orchestrator:
             if st: st.paused_from=p.current_state; self.db.save_state(st)
             self.set_state(p,WorkflowState.PAUSED)
 
+
+    def _pause_for_quota(self, p, r, state):
+        marker = next((x for x in (r.errors or []) if 'AI_QUOTA_EXHAUSTED' in str(x)), None)
+        if not marker:
+            return False
+        match = re.search(r'resume_at=([^ ]+)', str(marker))
+        resume_at = match.group(1) if match else datetime.now(timezone.utc).isoformat()
+        state.paused_from = p.current_state
+        state.quota_resume_at = resume_at
+        state.error_history.append(str(marker))
+        self.db.save_state(state)
+        self.set_state(p, WorkflowState.WAITING_FOR_QUOTA)
+        if self.notifier:
+            try:
+                role = getattr(r, 'agent_name', 'AI Agent')
+                models = str(marker).split('models=',1)[-1]
+                self.notifier._send('⏸️ <b>'+role+'</b> كل الموديلات المتاحة استنفدت الـQuota.\n🤖 Tried: <code>'+models+'</code>\n🕘 الاستئناف التلقائي: <code>'+resume_at+'</code>\n💾 المشروع محفوظ وسيكمل من نفس المرحلة.')
+            except Exception:
+                pass
+        return True
+
     def _feedback_for_task(self,p,task):
         state=self.db.get_state(p.id); parts=[]
         if task.failure_reason: parts.append('TEST/IMPLEMENTATION FAILURE:\n'+task.failure_reason)
@@ -281,12 +304,29 @@ class Orchestrator:
                 self.set_state(p, WorkflowState.TESTING)
                 p = self.db.get_project(pid)
         for _ in range(self.settings.max_iterations):
-            p=self.db.get_project(pid); state=self.db.get_state(pid) or state; state.iteration_count+=1; self.db.save_state(state); s=p.current_state
+            p=self.db.get_project(pid); state=self.db.get_state(pid) or state
+            if p.current_state == WorkflowState.WAITING_FOR_QUOTA:
+                resume_raw = state.quota_resume_at
+                try:
+                    due = bool(resume_raw) and datetime.fromisoformat(resume_raw) <= datetime.now(datetime.fromisoformat(resume_raw).tzinfo or timezone.utc)
+                except Exception:
+                    due = True
+                if not due:
+                    return state
+                resume_state = state.paused_from or WorkflowState.IDEA
+                state.quota_resume_at = None; state.paused_from = None; self.db.save_state(state)
+                self.set_state(p, resume_state)
+                p=self.db.get_project(pid)
+                if self.notifier:
+                    try:self.notifier._send('🟢 <b>#FACTORY</b> Quota window reached — استئناف المشروع من <code>'+resume_state.value+'</code>.')
+                    except Exception:pass
+            state.iteration_count+=1; self.db.save_state(state); s=p.current_state
             if s==WorkflowState.IDEA:
                 self.set_state(p,WorkflowState.DESIGNING); continue
             if s==WorkflowState.DESIGNING:
                 self.notifier.agent_started(p, 'UI/UX Designer Agent', 'بدأ تحديد الشاشات والـ user flow والـ design system') if self.notifier else None
                 r=self.agents['uiux'].run(ctx); self.record(state,r)
+                if self._pause_for_quota(p,r,state): continue
                 if r.success:
                     approval=ApprovalService(self.db).request(p.id,'design_approval','UI/UX design is ready. Approve the design before implementation.',Severity.MEDIUM,files=['docs/DESIGN.md','docs/design/preview.html'])
                     state.approvals.append(approval.id); self.db.save_state(state)
@@ -351,11 +391,14 @@ class Orchestrator:
                 self.set_state(p,WorkflowState.PLANNING); continue
             if s==WorkflowState.PLANNING:
                 self.notifier.agent_started(p, 'Planner Agent', 'بدأ تحليل المتطلبات وتحويلها إلى خطة تنفيذ') if self.notifier else None
-                r=self.agents['planner'].run(ctx); self.record(state,r); self.set_state(p,WorkflowState.DOCUMENTATION if r.success else WorkflowState.BLOCKED); continue
+                r=self.agents['planner'].run(ctx); self.record(state,r)
+                if self._pause_for_quota(p,r,state): continue
+                self.set_state(p,WorkflowState.DOCUMENTATION if r.success else WorkflowState.BLOCKED); continue
             if s==WorkflowState.DOCUMENTATION: self.set_state(p,WorkflowState.ANALYSIS); continue
             if s==WorkflowState.ANALYSIS:
                 self.notifier.agent_started(p, 'Analyzer Agent', 'بدأ تحليل الـ architecture والمتطلبات التقنية') if self.notifier else None
                 r=self.agents['analyzer'].run(ctx); self.record(state,r)
+                if self._pause_for_quota(p,r,state): continue
                 if r.success:
                     state.retry_counts.pop('analyzer_provider', None)
                     self.db.save_state(state)
@@ -407,6 +450,8 @@ class Orchestrator:
                     self.notifier.agent_started(p, 'Developer Agent', f'بدأ تنفيذ المهمة: {t.title}') if self.notifier else None
                     r=self.agents['developer'].run(ctx,t)
                 self.record(state,r)
+                if self._pause_for_quota(p,r,state):
+                    t.status=TaskStatus.PENDING; self.db.save_task(t); continue
                 if r.success:
                     t.status=TaskStatus.DONE; t.completed_at=datetime.now(timezone.utc); t.failure_reason=None
                 else:
@@ -536,6 +581,13 @@ class Orchestrator:
         self.set_state(p,WorkflowState.BLOCKED); state.error_history.append('MAX_WORKFLOW_ITERATIONS reached'); self.db.save_state(state); return state
 
     def record(self,state,r):
+        role_map={'Planner Agent':'planner','Analyzer Agent':'analyzer','Developer Agent':'developer','Code Reviewer':'reviewer','UI/UX Reviewer':'uiux_reviewer','UI/UX Designer Agent':'uiux'}
+        role=role_map.get(r.agent_name)
+        router=getattr(getattr(self,'agents',{}).get(role),'provider',None) if role else None
+        if router and getattr(router,'last_model',None):
+            data=r.detailed_output if isinstance(r.detailed_output,dict) else {}
+            data=dict(data); data['model_used']=router.last_model; data['models_attempted']=list(router.last_attempts)
+            r.detailed_output=data
         self.db.agent_result(state.project_id,r); state.agent_results.append(r.agent_name)
         if self.notifier:
             try: self.notifier.agent_result(self.db.get_project(state.project_id), r)
