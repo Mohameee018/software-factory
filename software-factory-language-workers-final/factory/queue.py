@@ -19,7 +19,8 @@ class PersistentJobQueue:
     def enqueue(self, project_id, task_id=None, priority=50):
         return self.db.enqueue_job(project_id, task_id, priority)
     def claim(self, worker_id=None, worker_type='generic'): return self.db.claim_job(worker_id or socket.gethostname(), worker_type)
-    def complete(self, job_id): self.db.update_job(job_id, JobStatus.COMPLETED.value, completed_at=now().isoformat(), worker_state='completed')
+    def heartbeat(self, job_id, worker_id=None): return self.db.extend_job_lease(job_id, worker_id or socket.gethostname())
+    def complete(self, job_id): self.db.update_job(job_id, JobStatus.COMPLETED.value, completed_at=now().isoformat(), worker_state='completed', lease_until=None)
     def retry(self, job_id, error): self.db.retry_job(job_id, error, self.max_retries)
     def fail(self, job_id, error): self.db.update_job(job_id, JobStatus.FAILED.value, completed_at=now().isoformat(), last_error=error, worker_state='failed')
     def cancel_project(self, project_id): self.db.cancel_pending_jobs(project_id)
