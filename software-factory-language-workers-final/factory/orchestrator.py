@@ -118,7 +118,13 @@ class Orchestrator:
         return p
 
     def _prepare_flutter_project(self, p, state):
-        # Validate Flutter and create a new empty Flutter workspace without fetching dependencies.
+        # Requirements/design artifacts are intentionally created before the Flutter
+        # scaffold. Never treat those docs as an unsafe non-empty application workspace.
+        # Scaffold in a temporary directory, then merge only generated Flutter files so
+        # the factory's docs and evidence remain authoritative and untouched.
+        import shutil
+        import tempfile
+
         adapter = by_name('flutter')
         if not adapter:
             state.error_history.append('Flutter adapter is not available.')
@@ -129,24 +135,43 @@ class Orchestrator:
             self.db.event(WorkflowEvent(project_id=p.id, event_type='COMMAND_RESULT', details={'kind': kind, 'command': env.command, 'exit_code': env.exit_code, 'stdout': env.stdout, 'stderr': env.stderr, 'duration_seconds': env.duration_seconds}))
             if env.exit_code != 0:
                 tool = 'Flutter SDK' if kind == 'flutter_environment' else 'Dart SDK'
-                state.error_history.append(f'{tool} is unavailable. Install {tool} and ensure it is on PATH.')
+                reason = (env.stderr or env.stdout or 'no command output')[-4000:]
+                state.error_history.append(f'{tool} is unavailable or failed validation: {reason}')
                 self.db.save_state(state)
                 return False
-        pubspec = Path(p.workspace_path) / 'pubspec.yaml'
+        workspace = Path(p.workspace_path)
+        pubspec = workspace / 'pubspec.yaml'
         if pubspec.exists():
             return True
-        files = [x for x in Path(p.workspace_path).rglob('*') if x.is_file() and '.git' not in x.parts]
-        if files:
-            state.error_history.append('Flutter workspace is not empty and has no pubspec.yaml; refusing to overwrite existing files.')
-            self.db.save_state(state)
-            return False
-        created = run_command('developer', 'flutter create --no-pub .', p.workspace_path, self.settings.command_timeout)
-        self.db.event(WorkflowEvent(project_id=p.id, event_type='COMMAND_RESULT', details={'kind': 'flutter_create', 'command': created.command, 'exit_code': created.exit_code, 'stdout': created.stdout, 'stderr': created.stderr, 'duration_seconds': created.duration_seconds}))
-        if created.exit_code != 0:
-            state.error_history.append(f'Flutter project creation failed: {created.stderr[-4000:]}')
-            self.db.save_state(state)
-            return False
-        return True
+
+        scaffold_parent = Path(tempfile.mkdtemp(prefix=f'.flutter-scaffold-{p.id}-', dir=str(workspace.parent)))
+        scaffold = scaffold_parent / 'app'
+        try:
+            created = run_command('developer', 'flutter create --no-pub app', str(scaffold_parent), self.settings.command_timeout)
+            self.db.event(WorkflowEvent(project_id=p.id, event_type='COMMAND_RESULT', details={'kind': 'flutter_create', 'command': created.command, 'exit_code': created.exit_code, 'stdout': created.stdout, 'stderr': created.stderr, 'duration_seconds': created.duration_seconds}))
+            if created.exit_code != 0:
+                state.error_history.append(f'Flutter project creation failed: {(created.stderr or created.stdout or "no command output")[-4000:]}')
+                self.db.save_state(state)
+                return False
+
+            for item in scaffold.iterdir():
+                if item.name == '.git':
+                    continue
+                destination = workspace / item.name
+                if item.is_dir():
+                    if destination.exists():
+                        # Preserve factory/user directories such as docs.
+                        shutil.copytree(item, destination, dirs_exist_ok=True)
+                    else:
+                        shutil.copytree(item, destination)
+                else:
+                    if destination.exists():
+                        # Never overwrite a pre-existing factory artifact.
+                        continue
+                    shutil.copy2(item, destination)
+            return True
+        finally:
+            shutil.rmtree(scaffold_parent, ignore_errors=True)
 
     def _flutter_dependencies_approved(self, p, state):
         approvals = self.db.list_approvals(p.id)
