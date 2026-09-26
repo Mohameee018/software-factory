@@ -64,6 +64,7 @@ class TelegramHandlers:
     async def ai_smoke(self, update, context):
         """Run a real AI request and expose enough diagnostics to verify failover."""
         import traceback
+        router = None
         try:
             router = self.service.model_router.for_role('planner')
             result = router.generate(
@@ -78,14 +79,8 @@ class TelegramHandlers:
                 parse_mode='HTML',
             )
         except Exception as exc:
-            router = getattr(self.service, 'model_router', None)
-            role_router = None
-            try:
-                role_router = router.for_role('planner') if router else None
-            except Exception:
-                pass
-            attempts = list(getattr(role_router, 'last_attempts', None) or [])
-            skipped = list(getattr(role_router, 'last_skipped', None) or [])
+            attempts = list(getattr(router, 'last_attempts', None) or [])
+            skipped = list(getattr(router, 'last_skipped', None) or [])
             tb = traceback.format_exc().splitlines()[-6:]
             await update.effective_message.reply_text(
                 f'❌ AI SMOKE FAIL\\nAttempts: <code>{", ".join(attempts) or "none"}</code>\\nSkipped: <code>{", ".join(skipped) or "none"}</code>\\nError: <code>{str(exc)[:700]}</code>\\nTrace: <code>{" | ".join(tb)[:1200]}</code>',
