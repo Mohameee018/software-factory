@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import urlparse\nimport hmac
 from factory.config import get_settings
 from factory.database import Database
 def snapshot(db):
