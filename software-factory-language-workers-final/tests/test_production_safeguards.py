@@ -8,6 +8,7 @@ from factory.models import Project
 class S:
     max_agent_runs=2
     max_project_seconds=0
+    max_agent_runs_by_role={'developer':1}
 
 
 def test_dynamic_company_roles():
@@ -52,3 +53,13 @@ def test_job_lease_recovery_and_project_exclusion(tmp_path):
     assert claimed and claimed.project_id==p1.id
     next_job=db.claim_job("w2")
     assert next_job and next_job.project_id==p2.id
+
+
+def test_role_budget_stops_role(tmp_path):
+    db=Database(tmp_path/"factory.db")
+    p=Project(name="RoleBudget",description="x",workspace_path=str(tmp_path/"p"))
+    db.save_project(p)
+    AR=__import__("factory.models",fromlist=["AgentResult"]).AgentResult
+    db.agent_result(p.id, AR(success=True,agent_name="developer"))
+    assert not BudgetManager(db,S).allowed_role(p.id,"developer")
+    assert BudgetManager(db,S).allowed_role(p.id,"tester")
