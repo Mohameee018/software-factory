@@ -65,7 +65,7 @@ def test_real_orchestrator_e2e_failure_fix_review_fix(tmp_path, monkeypatch):
     approval=[a for a in o.db.list_approvals(p.id) if a.requested_action=='design_approval'][-1]
     ApprovalService(o.db).resolve(approval, True, 'test')
     state=o.run(p.id, mock=False)
-    assert state.current_state == WorkflowState.READY_FOR_HUMAN
+    assert state.current_state == WorkflowState.READY_FOR_HUMAN, state.error_history
     final=[a for a in o.db.list_approvals(p.id) if a.requested_action=='final_approval'][-1]
     ApprovalService(o.db).resolve(final, True, 'test final approval')
     state=o.run(p.id, mock=False)
