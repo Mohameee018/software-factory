@@ -58,3 +58,13 @@ def test_manager_status_reflects_waiting_state():
 
     assert "WAITING_FOR_DESIGN_APPROVAL" in message
     assert "مستني قرار منك" in message
+
+
+def test_manager_routes_approval_ack_as_approve():
+    service = FakeService()
+    service.project.current_state = WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL
+    manager = ProjectManager(service)
+
+    result = manager.route(123, "تمام")
+
+    assert result["intent"] == "approve"
