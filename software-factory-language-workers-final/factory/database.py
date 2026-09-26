@@ -60,9 +60,9 @@ class Database:
   with self.conn() as c:
    c.execute('BEGIN IMMEDIATE')
    if worker_type == 'generic':
-    row=c.execute("SELECT id FROM jobs WHERE status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND resume_at<=?) ORDER BY priority DESC,created_at LIMIT 1").fetchone()
+    row=c.execute("SELECT id FROM jobs WHERE status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND resume_at<=?) ORDER BY priority DESC,created_at LIMIT 1",(now().isoformat(),)).fetchone()
    else:
-    row=c.execute("SELECT id FROM jobs WHERE (status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND resume_at<=?)) AND worker_type=? ORDER BY priority DESC,created_at LIMIT 1",(worker_type,)).fetchone()
+    row=c.execute("SELECT id FROM jobs WHERE (status IN ('PENDING','RETRYING') OR (status='WAITING_QUOTA' AND resume_at IS NOT NULL AND resume_at<=?)) AND worker_type=? ORDER BY priority DESC,created_at LIMIT 1",(now().isoformat(),worker_type)).fetchone()
    if not row:return None
    jid=row[0]; ts=now().isoformat(); lease=(datetime.now(timezone.utc)+timedelta(minutes=30)).isoformat()
    c.execute("UPDATE jobs SET status='RUNNING',started_at=COALESCE(started_at,?),worker_id=?,lease_until=?,worker_state='running',resume_at=NULL WHERE id=? AND (status IN ('PENDING','RETRYING') OR status='WAITING_QUOTA')",(ts,worker_id,lease,jid))
