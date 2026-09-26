@@ -3,7 +3,9 @@ from factory.models import WorkflowState
 class InvalidTransition(ValueError): pass
 TRANSITIONS={
  WorkflowState.IDEA:{WorkflowState.REQUIREMENTS_GATHERING,WorkflowState.DESIGNING,WorkflowState.BLOCKED,WorkflowState.CANCELLED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
- WorkflowState.REQUIREMENTS_GATHERING:{WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},\n WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL:{WorkflowState.REQUIREMENTS_GATHERING,WorkflowState.DESIGNING,WorkflowState.CANCELLED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},\n WorkflowState.DESIGNING:{WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
+ WorkflowState.REQUIREMENTS_GATHERING:{WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
+ WorkflowState.WAITING_FOR_REQUIREMENTS_APPROVAL:{WorkflowState.REQUIREMENTS_GATHERING,WorkflowState.DESIGNING,WorkflowState.CANCELLED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
+ WorkflowState.DESIGNING:{WorkflowState.WAITING_FOR_DESIGN_APPROVAL,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.WAITING_FOR_DESIGN_APPROVAL:{WorkflowState.DESIGNING,WorkflowState.DESIGN_APPROVED,WorkflowState.CANCELLED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.DESIGN_APPROVED:{WorkflowState.PLANNING,WorkflowState.BLOCKED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
  WorkflowState.PLANNING:{WorkflowState.DOCUMENTATION,WorkflowState.BLOCKED,WorkflowState.FAILED,WorkflowState.PAUSED,WorkflowState.WAITING_FOR_QUOTA},
