@@ -16,7 +16,9 @@ class TelegramBot:
         self.application.add_handler(CallbackQueryHandler(h.callback,pattern=r'^apr:[ar]:'))
         photo_filter = getattr(filters, 'PHOTO', None)
         if photo_filter is not None:
-            self.application.add_handler(MessageHandler(photo_filter,self._guard(h.photo)))
+            if photo_filter is not None: self.application.add_handler(MessageHandler(photo_filter,self._guard(h.photo)))
+        document_filter = getattr(filters, 'DOCUMENT', None)
+        if document_filter is not None: self.application.add_handler(MessageHandler(document_filter,self._guard(h.document)))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,self._guard(h.text)))
     def _guard(self, fn):
         async def wrapped(update, context):
