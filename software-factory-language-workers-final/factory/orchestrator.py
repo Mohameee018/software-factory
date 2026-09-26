@@ -224,6 +224,10 @@ class Orchestrator:
                     try:self.notifier.approval_requested(approval)
                     except Exception:pass
                 return state
+            elif p.project_type == ProjectType.UNKNOWN:
+                # UNKNOWN is valid at intake; retry should return the project to the
+                # normal design gate instead of treating missing stack metadata as a failure.
+                self.set_state(p, WorkflowState.IDEA)
             elif any('SDK is unavailable' in e or 'workspace is not empty' in e for e in (self.db.get_state(pid).error_history if self.db.get_state(pid) else [])):
                 self.set_state(p, WorkflowState.IDEA)
             else:
