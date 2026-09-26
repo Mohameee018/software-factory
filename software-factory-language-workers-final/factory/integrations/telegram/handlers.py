@@ -34,7 +34,8 @@ class TelegramHandlers:
             if effective_user and db and hasattr(db,'set_active_project'): db.set_active_project(effective_user.id,p.id)
             self._set_state(p,WorkflowState.REQUIREMENTS_GATHERING)
             await update.effective_message.reply_text(f'Created <code>{p.id}</code>. 🧑‍💼 #REQUIREMENTS هراجع اللي قلته وأسألك فقط عن اللي ناقص.',parse_mode='HTML')
-            await self._requirements_turn(update,context,p,description)
+            if hasattr(p, 'workspace_path'):
+                await self._requirements_turn(update,context,p,description)
             return
         context.user_data['awaiting_project']=True; await update.effective_message.reply_text('تمام. احكيلي عن المشروع براحتك، أو ابعت PRD/Design/صور/أي ملفات عندك.')
     async def text(self, update, context):
