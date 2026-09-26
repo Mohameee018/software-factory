@@ -149,6 +149,11 @@ def telegram():
   worker.stop()
   worker_thread.join(timeout=10)
 
+@app.command('dashboard')
+def dashboard():
+ from factory.dashboard import run_dashboard
+ s=get_settings(); run_dashboard(port=s.dashboard_port)
+
 @app.command('worker')
 def worker():
  from factory.server import run_worker
